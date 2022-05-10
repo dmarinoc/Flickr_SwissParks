@@ -60,7 +60,7 @@ flickr <- read_xlsx(here("Flickr_Data.xlsx"), col_types = c("numeric", "text", "
 
 summary(flickr)
 ```
-```{r include=FALSE}
+```{r include=TRUE}
 options(dplyr.summarise.inform = FALSE)
 ```
 
