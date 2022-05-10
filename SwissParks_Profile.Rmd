@@ -68,7 +68,7 @@ options(dplyr.summarise.inform = FALSE)
 
 #### a. Only pictures taken after 2004 (inclusive)
 
-```{r echo=FALSE}
+```{r echo=TRUE}
 # using subset function
 
 flickr_04 <- as_tbl_time(flickr, index = DATE)
@@ -81,7 +81,7 @@ summary(flickr_04)
 
 #### b. Only pictures that are in categories of land cover that are natural
 
-```{r echo=FALSE}
+```{r echo=TRUE}
 
 flickr_04nat <- filter(flickr_04, USE!=100, USE!=120, USE!=140, USE!=160)
 
@@ -90,7 +90,7 @@ summary(flickr_04nat)
 
 ## 1. GENERAL STATISTICS
 
-```{r echo=FALSE}
+```{r echo=TRUE}
 #Option 1 = Application of the filter of the use, only natural land cover
   
 ddbb <- flickr_04nat
@@ -108,7 +108,7 @@ ddbb <- flickr_04nat
 
 *a. Number of visitors each Swiss National Parks, according the land cover, *
    *NA values refers to users or land cover category that doesn't exist  in the park*
-```{r echo=FALSE}
+```{r echo=TRUE}
 landcover <- ddbb %>%
   group_by(PARK, USE, USER)%>%
   summarise(land_user = n())
@@ -143,7 +143,7 @@ kbl(landcover_park)%>%
 ```
 
 *b. Area (km2) of national parks*
-```{r echo=FALSE}
+```{r echo=TRUE}
 area <- ddbb %>%
   group_by(PARK, km2) %>%
   summarise(flickr_feature = n())
@@ -161,7 +161,7 @@ summary(area)
 ```
 
 *c. Count of pictures in the parks*
-```{r echo=FALSE}
+```{r echo=TRUE}
 photos <- ddbb %>%
   group_by(PARK) %>%
   summarise(photo = n()) %>%
@@ -176,7 +176,7 @@ summary(photos)
 ```
 
 *d. Count of Users in the parks*
-```{r echo=FALSE}
+```{r echo=TRUE}
 users_flickr <- ddbb %>%
   group_by(PARK, USER) %>%
   summarise(user_photos =  n())
@@ -195,7 +195,7 @@ summary(users_flickr)
 ```
  
 *d. Statistic of area (km2), users and photos for each Swiss National Parks:*
-```{r echo=FALSE}
+```{r echo=TRUE}
 general <- data.frame("Parks"= area$PARK, "km2"= area$km, "Photos"= photos$photo, "Photos_per"= photos$ratio_photos, "Photos_km"=round((photos$photo/area$km),2),"Users"=users_flickr$user, "Users_per"=users_flickr$ratio_users, "Users_km"=round((users_flickr$user/area$km),2))
 
 kbl(general)%>%
@@ -205,7 +205,7 @@ kbl(general)%>%
 ## 2. PARK USERS PER SEASON
 
 *Number of users per season in each Swiss National Parks*
-```{r echo=FALSE}
+```{r echo=TRUE}
 #Creating season column
 
 ddbb$DATE <- as.Date(ddbb$DATE)
@@ -256,7 +256,7 @@ season_park %>% pivot_longer(-PARK) %>%
 
 ## 3. PARK VISITORS PER DAY OF THE WEEK
 *Number of visitors per day in each Swiss National Parks*
-```{r echo=FALSE}
+```{r echo=TRUE}
 
 ddbb$DAY <- weekdays(as.Date(ddbb$DATE))
 #
@@ -281,8 +281,7 @@ kbl(daily_park)%>%
 ```
 
 *Bar plot of visitors per day in the Parks*
-```{r setup, include=FALSE}
-
+```{r setup, include=TRUE}
 
 # Chunk options
 knitr::opts_chunk$set(
@@ -354,7 +353,7 @@ mosaicplot(count, main = "Daily visitor of the Swiss National Parks",
 
 ## 5. USERS PROFILES
 *Analysis of users according the canton origin, visited park, and time span between the first and the last picture *
-```{r echo=FALSE}
+```{r echo=TRUE}
   #5.a. Canton of origin
 canton <- ddbb %>%
   group_by(CANTON, USER)%>%
@@ -416,19 +415,19 @@ visit <- subset(visit, select=-c(photos.x,photos.y))
 ```
 
 ### Origin of user per Park
-```{r echo=FALSE}
+```{r echo=TRUE}
 kbl(park_users[1:20,])%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 ```
 
 ### Origin of user per Canton
-```{r echo=FALSE}
+```{r echo=TRUE}
 kbl(canton_users[1:20,])%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 ```
 
 ### User timespan of taken pictures
-```{r echo=FALSE}
+```{r echo=TRUE}
 kbl(visit[1:20,])%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 ```
