@@ -872,17 +872,17 @@ NA
   #Counting the total area of parks
 area &lt;- area %&gt;%
   group_by(PARK) %&gt;%
-  summarise(km = round(sum(km2),2))
+  summarise(km2 = round(sum(km2),2))
 
 #The total area of parks:
 area %&gt;%
-  summarize(area = sum(km))#km2</code></pre>
+  summarize(area = sum(km2))#km2</code></pre>
 <pre><code>## # A tibble: 1 x 1
 ##    area
 ##   &lt;dbl&gt;
 ## 1 6018.</code></pre>
 <pre class="r"><code>summary(area)</code></pre>
-<pre><code>##      PARK                 km        
+<pre><code>##      PARK                km2        
 ##  Length:20          Min.   :  9.38  
 ##  Class :character   1st Qu.:158.43  
 ##  Mode  :character   Median :285.08  
@@ -938,7 +938,7 @@ users_flickr %&gt;%
 ##                     3rd Qu.:316.5   3rd Qu.: 6.277  
 ##                     Max.   :944.0   Max.   :18.723</code></pre>
 <p><em>d. Statistic of area (km2), users and photos for each Swiss National Parks:</em></p>
-<pre class="r"><code>general &lt;- data.frame(&quot;Parks&quot;= area$PARK, &quot;km2&quot;= area$km, &quot;Photos&quot;= photos$photo, &quot;Photos_per&quot;= photos$ratio_photos, &quot;Photos_km&quot;=round((photos$photo/area$km),2),&quot;Users&quot;=users_flickr$user, &quot;Users_per&quot;=users_flickr$ratio_users, &quot;Users_km&quot;=round((users_flickr$user/area$km),2))
+<pre class="r"><code>general &lt;- data.frame(&quot;Parks&quot;= area$PARK, &quot;km2&quot;= area$km2, &quot;Photos&quot;= photos$photo, &quot;Photos_per&quot;= photos$ratio_photos, &quot;Photos_km&quot;=round((photos$photo/area$km2),2),&quot;Users&quot;=users_flickr$user, &quot;Users_per&quot;=users_flickr$ratio_users, &quot;Users_km&quot;=round((users_flickr$user/area$km2),2))
 
 kbl(general)%&gt;%
   kable_styling(bootstrap_options = &quot;striped&quot;, full_width = F, position = &quot;left&quot;)</code></pre>
