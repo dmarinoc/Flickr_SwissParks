@@ -29,6 +29,7 @@ output:
 #install.packages("stringr")
 #install.packages("tibbletime")
 #install.packages("ggmosaic")
+#install.packages("scales")
 ```
 
 ```{r include=FALSE}
@@ -47,6 +48,7 @@ library(ggplot2)
 library(stringr)
 library(tibbletime)
 library(ggmosaic)
+library(scales)
 ```
 
 ### DATA LOADING
@@ -151,11 +153,11 @@ area <- ddbb %>%
   #Counting the total area of parks
 area <- area %>%
   group_by(PARK) %>%
-  summarise(km2 = round(sum(km2),2))
+  summarise(km = round(sum(km2),2))
 
 #The total area of parks:
 area %>%
-  summarize(area = sum(km2))#km2
+  summarize(area = sum(km))#km2
 
 summary(area)
 ```
@@ -196,7 +198,7 @@ summary(users_flickr)
  
 *d. Statistic of area (km2), users and photos for each Swiss National Parks:*
 ```{r echo=TRUE}
-general <- data.frame("Parks"= area$PARK, "km2"= area$km2, "Photos"= photos$photo, "Photos_per"= photos$ratio_photos, "Photos_km"=round((photos$photo/area$km2),2),"Users"=users_flickr$user, "Users_per"=users_flickr$ratio_users, "Users_km"=round((users_flickr$user/area$km2),2))
+general <- data.frame("Parks"= area$PARK, "km"= area$km, "Photos"= photos$photo, "Photos_per"= photos$ratio_photos, "Photos_km"=round((photos$photo/area$km),2),"Users"=users_flickr$user, "Users_per"=users_flickr$ratio_users, "Users_km"=round((users_flickr$user/area$km),2))
 
 kbl(general)%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
