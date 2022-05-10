@@ -1,30 +1,434 @@
+
 ---
-title: "Analysis_FlickrParks"
+title: "Analysis of Swiss National Parks with Flickr data"
 author: "Daniela Marino"
-date: "5/10/2022"
-output: html_document
+date: "5/2/2022"
+output: 
+  html_document: default
+  
 ---
 
+*Notes:*
+  *Data: 2020-11-03_Switzerland_upto_2018-11-31, Switzerland_2018-12-01_2020-11-03.*
+  *Pre-processing: After gathering the data, the two datasets were merged and it was cleaned the duplicates and empty values, specially for dates*
+
+
+*PACKAGES*
+```{r echo=TRUE}
+#PACKAGES
+#install.packages("tidyverse")
+#install.packages("magrittr")
+#install.packages("dplyr")
+#install.packages("readxl")
+#install.packages("here")
+#install.packages("skimr")
+#install.packages("kableExtra")
+#install.packages("knitr")
+#install.packages(magrittr)
+#install.packages(lubridate)
+#install.packages("stringr")
+#install.packages("tibbletime")
+#install.packages("ggmosaic")
+```
+
+```{r include=FALSE}
+#Libraries
+library(tidyverse)
+library(magrittr)
+library(dplyr)
+library(readxl)
+library(here)
+library(skimr)
+library(kableExtra)
+library(knitr)
+library(magrittr)
+library(lubridate)
+library(ggplot2)
+library(stringr)
+library(tibbletime)
+library(ggmosaic)
+```
+
+### DATA LOADING
+```{r echo=TRUE}
+#Data source
+flickr <- read_xlsx(here("Flickr_Data.xlsx"), col_types = c("numeric", "text", "numeric", 
+        "numeric", "text", "date", "numeric", 
+        "text", "numeric", "text", "text", 
+        "text", "text", "text", "text", "text", 
+        "text"))# explore data
+
+summary(flickr)
+```
+```{r include=FALSE}
+options(dplyr.summarise.inform = FALSE)
+```
+
+### FILTERING
+
+#### a. Only pictures taken after 2004 (inclusive)
+
+```{r echo=FALSE}
+# using subset function
+
+flickr_04 <- as_tbl_time(flickr, index = DATE)
+
+flickr_04 <- filter(flickr_04, DATE >= as.Date("2004-01-01"))
+
+summary(flickr_04)
+
+```
+
+#### b. Only pictures that are in categories of land cover that are natural
+
+```{r echo=FALSE}
+
+flickr_04nat <- filter(flickr_04, USE!=100, USE!=120, USE!=140, USE!=160)
+
+summary(flickr_04nat)
+```
+
+## 1. GENERAL STATISTICS
+
+```{r echo=FALSE}
+#Option 1 = Application of the filter of the use, only natural land cover
+  
+ddbb <- flickr_04nat
+  
+#Option 2 = No application of the filter of the use, all land cover types
+
+#ddbb <- flickr_04
+
+
+#Option 3 = Using all dataset with no filters (after 2004 and land cover)
+
+#ddbb <- flickr
+
+```
+
+*a. Number of visitors each Swiss National Parks, according the land cover, *
+   *NA values refers to users or land cover category that doesn't exist  in the park*
+```{r echo=FALSE}
+landcover <- ddbb %>%
+  group_by(PARK, USE, USER)%>%
+  summarise(land_user = n())
+
+  #Counting the number of users per park in each season
+landcover <- landcover %>%
+  group_by(PARK, USE) %>%
+  summarise(land = n())
+
+lu<- pivot_wider(landcover, names_from = USE, values_from = land)
+landcover_park <- as.data.frame(lu)
+
+  #Rename of the codes (numbers) with the names of the days
+
+    #Land cover categories that are reduced
+names(landcover_park)[names(landcover_park)=="100"] <- "Building area"
+names(landcover_park)[names(landcover_park)=="120"] <- "Traffic and transportation surface"
+names(landcover_park)[names(landcover_park)=="140"] <- "Special settlement areas"
+names(landcover_park)[names(landcover_park)=="160"] <- "Recreation and green spaces"
+
+    #Land cover categories that are considered for the analysis
+names(landcover_park)[names(landcover_park)=="200"] <- "Fruit growing, viticulture, horticulture"
+names(landcover_park)[names(landcover_park)=="220"] <- "Arable and Forage Cultivation"
+names(landcover_park)[names(landcover_park)=="240"] <- "Alpine farming"
+names(landcover_park)[names(landcover_park)=="300"] <- "Forest"
+names(landcover_park)[names(landcover_park)=="400"] <- "Lakes and rivers"
+names(landcover_park)[names(landcover_park)=="420"] <- "Unproductives"
+
+  #Display of the table with a better format
+kbl(landcover_park)%>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
+
+*b. Area (km2) of national parks*
+```{r echo=FALSE}
+area <- ddbb %>%
+  group_by(PARK, km2) %>%
+  summarise(flickr_feature = n())
+
+  #Counting the total area of parks
+area <- area %>%
+  group_by(PARK) %>%
+  summarise(km = round(sum(km2),2))
+
+#The total area of parks:
+area %>%
+  summarize(area = sum(km))#km2
+
+summary(area)
+```
+
+*c. Count of pictures in the parks*
+```{r echo=FALSE}
+photos <- ddbb %>%
+  group_by(PARK) %>%
+  summarise(photo = n()) %>%
+  mutate(ratio_photos= round((photo / sum(photo))*100, 3)) %>% 
+  arrange(desc(ratio_photos))
+
+#The total number of pictures is:
+ddbb %>%
+  summarize(count =  n())#pictures
+
+summary(photos)
+```
+
+*d. Count of Users in the parks*
+```{r echo=FALSE}
+users_flickr <- ddbb %>%
+  group_by(PARK, USER) %>%
+  summarise(user_photos =  n())
+  #Counting the total area of parks
+users_flickr <- users_flickr %>%
+  group_by(PARK) %>%
+  summarise(user = n())%>%
+  mutate(ratio_users= round((user / sum(user))*100, 3)) %>% 
+  arrange(desc(ratio_users))
+
+#The total area of parks:
+users_flickr %>%
+  summarize(users = sum(user))#users
+
+summary(users_flickr)
+```
+ 
+*d. Statistic of area (km2), users and photos for each Swiss National Parks:*
+```{r echo=FALSE}
+general <- data.frame("Parks"= area$PARK, "km2"= area$km, "Photos"= photos$photo, "Photos_per"= photos$ratio_photos, "Photos_km"=round((photos$photo/area$km),2),"Users"=users_flickr$user, "Users_per"=users_flickr$ratio_users, "Users_km"=round((users_flickr$user/area$km),2))
+
+kbl(general)%>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
+
+## 2. PARK USERS PER SEASON
+
+*Number of users per season in each Swiss National Parks*
+```{r echo=FALSE}
+#Creating season column
+
+ddbb$DATE <- as.Date(ddbb$DATE)
+
+ #create dates variable for your column that contains dates 
+dates <- ddbb$DATE
+#get the month of the date, create new column called month
+ddbb$month<-(month(dates, label=TRUE))
+
+ddbb$SEASON <- ifelse(ddbb$month %in% c('May','Jun','Jul'), "SUMMER",
+                    ifelse (ddbb$month %in% c('Aug','Sep','Oct'), "AUTUMN",
+                            ifelse (ddbb$month %in% c('Nove','Dec','Jan'), 
+                                    "WINTER", "SPRING")))
+
+#Calculation of statistics per Season
+season <- ddbb %>%
+  group_by(PARK, SEASON, USER)%>%
+  summarise(visit_season = n())
+
+  #Counting the number of users per park in each season
+season <- season %>%
+  group_by(PARK, SEASON) %>%
+  summarise(season_users = n())
+
+sp<- pivot_wider(season, names_from = SEASON, values_from = season_users)
+season_park <- data.frame(sp)
+
+  #Display of the table with a better format
+kbl(season_park)%>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+
+  #Stacked normalized horizontal bar graph
+season_park %>% pivot_longer(-PARK) %>%
+  ggplot(aes(x = factor(PARK), y = value, fill = name, group = name))+
+  geom_bar(stat='identity', color='white', position='fill')+
+  scale_y_continuous(labels = scales::percent)+
+  scale_fill_manual(values=c("#ed7c31", "#00b04f", "#ffbf00","#00b0f0"))+
+  theme(legend.position = 'bottom',
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        plot.title = element_text(hjust=0.5))+
+  coord_flip() +
+  xlab('Swiss National Parks') + ylab('% visitors') +
+  labs( fill = "SEASONS")+
+  ggtitle('Proportion of visitors per Season')
+
+```
+
+## 3. PARK VISITORS PER DAY OF THE WEEK
+*Number of visitors per day in each Swiss National Parks*
+```{r echo=FALSE}
+
+ddbb$DAY <- weekdays(as.Date(ddbb$DATE))
+#
+photoUser_day <- ddbb %>%
+  group_by(PARK, DAY, USER)%>%
+  summarise(photo_day = n())
+
+  #Counting the number of users per park in each season
+daily <- photoUser_day %>%
+  group_by(PARK, DAY) %>%
+  summarise(visit_day = n())
+
+sd<- pivot_wider(daily, names_from = DAY, values_from = visit_day)
+
+sd <- sd[, c(1, 3, 7, 8, 6, 2, 4, 5)]
+
+daily_park <- as.data.frame(sd)
+
+  #Display of the table with a better format
+kbl(daily_park)%>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
+
+*Bar plot of visitors per day in the Parks*
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+
+
+# Chunk options
+knitr::opts_chunk$set(
+ fig.width = 10,
+ fig.asp = 0.9,
+ out.width = "100%"
+)
 ```
 
-## R Markdown
+```{r theme_ggplot2, echo = FALSE}
+theme_base <- function(base_size = 14) {
+  theme_bw(base_size = base_size) %+replace%
+    theme(
+        legend.position = 'top',
+        legend.background = element_rect(fill = "transparent", colour = NA),
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        plot.title = element_text(hjust=0.5, face = 'bold'),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line = element_line(color = "black", arrow = arrow(length = unit(0.3, "lines"), type = "closed")),
+        axis.text.x = element_text(angle = 90, vjust = 0.2, hjust=0.2, size = 10),
+        axis.text.y = element_text(size = 10),
+        strip.background = element_rect(fill = "#17252D", color = "#17252D"),
+        strip.text = element_text(size = rel(0.85), face = "bold", color = "white", margin = margin(5,0,5,0))
+        )
+}
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
 ```
 
-## Including Plots
+```{r echo=TRUE}
+  #Horizontal bar chart of daily number of visitors per Park
+daily_park %>% 
+  pivot_longer(-PARK) %>%
+ggplot(aes(x = factor(PARK), y = value, fill = name, group = name)) +
+  geom_bar(position=position_dodge2(2), stat="identity", color='white', width = 0.8)+
+  scale_fill_manual(values=c("#4a5b6a", "#637687", "#901a2a","#e29b2c", "#5f6972","#a5772f","#e29b2c"))+
+  theme_base()+
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 22))+
+  xlab('Swiss National Parks') + ylab('Number of visitors') +
+  labs( fill = "DAY")+
+  ggtitle('Daily number of visitors')
 
-You can also embed plots, for example:
+```
+*Mosaic plot of visitors per day in the Parks (Two test)*
+```{r echo=TRUE}
+  #GRAPH OF MOSAIC PLOT OF PARKS AND DAYS
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+#TEST 1
+ggplot(data = photoUser_day) +
+  geom_mosaic(aes(x=product(DAY, PARK), fill = DAY)) +
+  labs(y = "", title=" offset = 0.01") +
+  theme(axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.text.x = element_text(angle = 90, vjust = 0.2, hjust=0.2, size = 8))
+
+#TEST 2
+count <- table(photoUser_day$DAY,  photoUser_day$PARK)
+
+mosaicplot(count, main = "Daily visitor of the Swiss National Parks",
+           sub = "Product of visitors",
+           xlab = "Days",
+           ylab = "Parks",
+           las = 1,
+           border = "black",
+           off = 10,
+           shade = TRUE)
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+## 5. USERS PROFILES
+*Analysis of users according the canton origin, visited park, and time span between the first and the last picture *
+```{r echo=FALSE}
+  #5.a. Canton of origin
+canton <- ddbb %>%
+  group_by(CANTON, USER)%>%
+  summarise(canton_user = n())
+
+co<- pivot_wider(canton, names_from = CANTON, values_from = canton_user)
+canton_users <- as.data.frame(co)
+canton_users[is.na(canton_users)] = 0
+canton_users <- canton_users %>% mutate_if(is.numeric, ~1 * (. > 0))
+
+  #5.b. Park of origin
+park <- ddbb %>%
+  group_by(PARK, USER)%>%
+  summarise(park_user = n())
+
+po<- pivot_wider(park, names_from = PARK, values_from = park_user)
+park_users <- as.data.frame(po)
+park_users[is.na(park_users)] = 0
+park_users <- park_users %>% mutate_if(is.numeric, ~1 * (. > 0))
+
+  #5.c. Time span
+
+user <- ddbb %>%
+  group_by(USER)%>%
+  summarise(photos = n())
+user <- as.data.frame(user)
+
+dt <- ddbb %>%
+  group_by(USER, DATE)%>%
+  summarise(photos = n())%>%
+  mutate(DATE=as.Date(DATE))
+
+dt1 <- dt %>%
+    group_by(USER) %>%
+    arrange(DATE) %>%
+    slice(1L)
+first <- as.data.frame(dt1)
+names(first)[names(first)=="DATE"] <- "start"
+
+dt2 <- dt %>%
+    group_by(USER) %>%
+     arrange(desc(DATE)) %>%
+    slice(1L)
+last <- as.data.frame(dt)
+names(last)[names(last)=="DATE"] <- "end"
+
+dt <- merge(last, first, by="USER")
+
+dur <- dt %>%
+  mutate(
+    days = end - start,
+    seconds    = as.numeric(difftime(end, start)) / 365.25,
+    years = round((start %--% end) / years(1)),
+    between = end %--% start 
+  )
+
+visit <-  merge(user, dur, by="USER", all=T)
+visit <- subset(visit, select=-c(photos.x,photos.y))
+```
+
+### Origin of user per Park
+```{r echo=FALSE}
+kbl(park_users[1:20,])%>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
+
+### Origin of user per Canton
+```{r echo=FALSE}
+kbl(canton_users[1:20,])%>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
+
+### User timespan of taken pictures
+```{r echo=FALSE}
+kbl(visit[1:20,])%>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
