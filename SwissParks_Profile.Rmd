@@ -356,7 +356,7 @@ ggplot(aes(x = factor(PARK), y = value, fill = name, group = name)) +
 ```{r echo=TRUE}
   #GRAPH OF MOSAIC PLOT OF PARKS AND DAYS
 
-#TEST 1
+#TEST 1: 
 ggplot(data = photoUser_day) +
   geom_mosaic(aes(x=product(DAY, PARK), fill = DAY)) +
   scale_fill_manual(values=c("#27ae60","#2ecc71","#76d7c4", "#5dade2", "#2980b9", "#f39c12","#d35400"))+
@@ -401,7 +401,19 @@ co<- pivot_wider(canton, names_from = CANTON, values_from = canton_user)
 canton_users <- as.data.frame(co)
 canton_users[is.na(canton_users)] = 0
 canton_users <- canton_users %>% mutate_if(is.numeric, ~1 * (. > 0))
+canton_users$Total_Canton = rowSums(canton_users[,c(2:13)])
+canton_users <- canton_users[order(canton_users$Total_Canton, decreasing = TRUE),]
 
+ggplot(canton_users, aes(x=Total_Canton))+
+  geom_histogram(binwidth=1 ,colour="black", fill="white")+
+  geom_vline(aes(xintercept=mean(Total_Canton)), color="blue", linetype="dashed", size=1)+
+  labs(title="Histogram of Cantons by users ",x="Number of visited Cantons", y = "Count of users")+
+  scale_x_continuous(breaks = seq(0, 12, 1))+
+  scale_y_continuous(breaks = seq(0, 2500, 100))
+
+```
+
+```{r echo=TRUE}
   #5.b. Park of origin
 park <- ddbb %>%
   group_by(PARK, USER)%>%
@@ -411,7 +423,19 @@ po<- pivot_wider(park, names_from = PARK, values_from = park_user)
 park_users <- as.data.frame(po)
 park_users[is.na(park_users)] = 0
 park_users <- park_users %>% mutate_if(is.numeric, ~1 * (. > 0))
+park_users$Total_Park = rowSums(park_users[,c(2:21)])
+park_users <- park_users[order(park_users$Total_Park, decreasing = TRUE),]
 
+ggplot(park_users, aes(x=Total_Park))+
+  geom_histogram(binwidth=1 ,colour="black", fill="white")+
+  geom_vline(aes(xintercept=mean(Total_Park)), color="blue", linetype="dashed", size=1)+
+  labs(title="Histogram of Parks by users ",x="Number of visited Parks", y = "Count of users")+
+  scale_x_continuous(breaks = seq(0, 20, 1))+
+  scale_y_continuous(breaks = seq(0, 2500, 100))
+
+```
+
+```{r echo=TRUE}
   #5.c. Time span
 
 user <- ddbb %>%
@@ -448,20 +472,70 @@ dur <- dt %>%
     between = end %--% start 
   )
 
-visit <-  merge(user, dur, by="USER", all=T)
-visit <- subset(visit, select=-c(photos.x,photos.y))
+time_user <-  merge(user, dur, by="USER", all=T)
+time_user <- subset(time_user, select=-c(photos.x,photos.y))
+time_user <- time_user[order(time_user$seconds, decreasing = TRUE),]
 
-#Parks with user that take more than 1 picture per day
-freq_day <- ddbb %>%
-  group_by(PARK, USER, DATE)%>%
-  summarise(photos = n())%>%
-  mutate(DATE=as.Date(DATE))
+ggplot(time_user, aes(x=years))+
+  geom_histogram(binwidth=1 ,colour="black", fill="white")+
+  geom_vline(aes(xintercept=mean(years)), color="blue", linetype="dashed", size=1)+
+  labs(title="Histogram of time between first and last picture by users ",x="time span in years", y = "Count of users")+
+  scale_x_continuous(breaks = seq(0, 20, 1))+
+  scale_y_continuous(breaks = seq(0, 5000, 500))
+
+  
 
 ```
 
+```{r echo=TRUE}
+  #5.d. Frequency of visits
+
+#Photos taken in the same date in the same position
+photo_date_place <- ddbb %>%
+  group_by(USER, DATE, lat)%>%
+  summarise(photo1day_sameplace = n())
+
+ggplot(photo_date_place, aes(x=photo1day_sameplace))+
+  geom_histogram(binwidth=1 ,colour="black", fill="white")+
+  geom_vline(aes(xintercept=mean(photo1day_sameplace)), color="blue", linetype="dashed", size=1)+
+  labs(title="Number of photos in a day, in the same place ",x="No. pictures in the same place in a day", y = "No. users")+
+  xlim(c(0,80))+ ylim(c(0,500))
+
+user_date_place <- photo_date_place %>%
+  group_by(USER, DATE)%>%
+  summarise(moves1day_users= n())
+
+ggplot(user_date_place, aes(x=moves1day_users))+
+  geom_histogram(binwidth=1 ,colour="black", fill="white")+
+  geom_vline(aes(xintercept=mean(moves1day_users)), color="blue", linetype="dashed", size=1)+
+  labs(title="Number of moves in a day", x="No. moves in a day", y = "No. users")+
+  xlim(c(0,100))+ ylim(c(0,2000))
+
+
+```
+
+```{r echo=TRUE}
+#Presence of visitors in a day, in different positions
+
+user_daily_visits <- user_date_place %>%
+  group_by(USER)%>%
+  summarise(user_day_stay = n())
+
+ggplot(user_daily_visits, aes(x=user_day_stay))+
+  geom_histogram(binwidth=1 ,colour="black", fill="white")+
+  geom_vline(aes(xintercept=mean(user_day_stay)), color="blue", linetype="dashed", size=1)+
+  labs(title="Timespend in a place (possible in different visits)", x="No. days spend", y = "No. users")+
+  xlim(c(0,100))+ ylim(c(0,600))
+
+```
+
+
+
+
+
 ### Origin of user per Park
 ```{r echo=TRUE}
-kbl(park_users[1:20,])%>%
+ kbl(park_users[1:20,])%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 ```
 
@@ -471,8 +545,8 @@ kbl(canton_users[1:20,])%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 ```
 
-### User timespan of taken pictures
+### User timespend of taken pictures
 ```{r echo=TRUE}
-kbl(visit[1:20,])%>%
+kbl(time_user[1:20,])%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 ```
