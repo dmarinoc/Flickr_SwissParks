@@ -626,7 +626,7 @@ Heaps_plot(dtm)
 Zipf_plot(dtm)
 
 ```
-
+*Bipartite network of parks and tags*
 ```{r echo=FALSE}
 dtm_df <- reshape2::melt(as.matrix(dtm))
 # remove 0 values and order the data.frame
