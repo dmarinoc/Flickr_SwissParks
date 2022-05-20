@@ -1,8 +1,8 @@
 
 ---
 title: "Analysis of Swiss National Parks with Flickr data"
-author: "Daniela Marino"
-date: "5/2/2022"
+author: "Daniela Mariño"
+date: "Mayo 2022"
 output: 
   html_document: default
   
@@ -30,6 +30,13 @@ output:
 #install.packages("tibbletime")
 #install.packages("ggmosaic")
 #install.packages("scales")
+#install.packages("tm") # for text mining
+#install.packages("SnowballC") # for text stemming
+#install.packages("wordcloud") # word-cloud generator 
+#install.packages("RColorBrewer") # color palettes
+#install.packages("quanteda")
+#install.packages("igraph")
+#install.packages("reshape2")
 ```
 
 ```{r include=FALSE}
@@ -62,7 +69,8 @@ flickr <- read_xlsx(here("Flickr_Data.xlsx"), col_types = c("numeric", "text", "
 
 summary(flickr)
 ```
-```{r include=TRUE}
+
+```{r include=FALSE}
 options(dplyr.summarise.inform = FALSE)
 ```
 
@@ -78,13 +86,11 @@ flickr_04 <- as_tbl_time(flickr, index = DATE)
 flickr_04 <- filter(flickr_04, DATE >= as.Date("2004-01-01"))
 
 summary(flickr_04)
-
 ```
 
 #### b. Only pictures that are in categories of land cover that are natural
 
 ```{r echo=TRUE}
-
 flickr_04nat <- filter(flickr_04, USE!=100, USE!=120, USE!=140, USE!=160)
 
 summary(flickr_04nat)
@@ -95,7 +101,9 @@ summary(flickr_04nat)
 ```{r echo=TRUE}
 #Option 1 = Application of the filter of the use, only natural land cover
   
-ddbb <- flickr_04nat
+db <- flickr_04nat
+
+ddbb <- db
   
 #Option 2 = No application of the filter of the use, all land cover types
 
@@ -110,7 +118,7 @@ ddbb <- flickr_04nat
 
 *a. Number of visitors each Swiss National Parks, according the land cover, *
    *NA values refers to users or land cover category that doesn't exist  in the park*
-```{r echo=TRUE}
+```{r echo=FALSE}
 landcover <- flickr_04 %>%
   group_by(PARK, USE, USER)%>%
   summarise(land_user = n())
@@ -145,7 +153,7 @@ kbl(landcover_park)%>%
 ```
 
 *b. Area (km2) of national parks*
-```{r echo=TRUE}
+```{r echo=FALSE}
 area <- ddbb %>%
   group_by(PARK, km2) %>%
   summarise(flickr_feature = n())
@@ -163,7 +171,7 @@ summary(area)
 ```
 
 *c. Count of pictures in the parks*
-```{r echo=TRUE}
+```{r echo=FALSE}
 photos <- ddbb %>%
   group_by(PARK) %>%
   summarise(photo = n()) %>%
@@ -178,7 +186,7 @@ summary(photos)
 ```
 
 *d. Count of Users in the parks*
-```{r echo=TRUE}
+```{r echo=FALSE}
 users_flickr <- ddbb %>%
   group_by(PARK, USER) %>%
   summarise(user_photos =  n())
@@ -198,14 +206,14 @@ summary(users_flickr)
  
 *d. Statistic of area (km2), users and photos for each Swiss National Parks:*
 *NOTE: THESE VALUES ONLY CONSIDER THE NATURAL LAND COVER  (the dismissed categories are: Building area", "Traffic and transportation surface", "Special settlement areas", "Recreation and green spaces"*
-```{r echo=TRUE}
+```{r echo=FALSE}
 general <- data.frame("Parks"= area$PARK, "km"= area$km, "Photos"= photos$photo, "Photos_per"= photos$ratio_photos, "Photos_km"=round((photos$photo/area$km),2),"Users"=users_flickr$user, "Users_per"=users_flickr$ratio_users, "Users_km"=round((users_flickr$user/area$km),2))
 
 kbl(general)%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 ```
 ## 1. YEARLY VISITOR IN THE PARKS
-```{r echo=TRUE}
+```{r echo=FALSE}
 
 ddbb$DATE <- as.Date(ddbb$DATE)
 ddbb$YEAR <- format(ddbb$DATE, format="%Y")
@@ -233,7 +241,7 @@ ggplot(data = yearly_counts, aes(x = YEAR, y = VISITS, group = 1)) +
 ## 2. PARK USERS PER SEASON
 *Number of users per season in each Swiss National Parks*
 
-```{r echo=TRUE}
+```{r echo=FALSE}
 #Creating season column
 
  #create dates variable for your column that contains dates 
@@ -283,7 +291,7 @@ season_park %>% pivot_longer(-PARK) %>%
 
 ## 3. PARK VISITORS PER DAY OF THE WEEK
 *Number of visitors per day in each Swiss National Parks*
-```{r echo=TRUE}
+```{r echo=FALSE}
 
 ddbb$DAY <- weekdays(as.Date(ddbb$DATE))
 ddbb$DAY <- factor(ddbb$DAY, levels = c("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"))
@@ -336,9 +344,9 @@ theme_base <- function(base_size = 14) {
 }
 
 ```
+*Horizontal bar chart of daily number of visitors per Park*
+```{r echo=FALSE}
 
-```{r echo=TRUE}
-  #Horizontal bar chart of daily number of visitors per Park
 
 daily_park %>% 
   pivot_longer(-PARK)  %>% 
@@ -352,11 +360,10 @@ ggplot(aes(x = factor(PARK), y = value, fill = name, group = name)) +
   ggtitle('Daily number of visitors')
 
 ```
-*Mosaic plot of visitors per day in the Parks (Two test)*
-```{r echo=TRUE}
-  #GRAPH OF MOSAIC PLOT OF PARKS AND DAYS
-
-#TEST 1: 
+###Mosaic plot of visitors per day in the Parks (Two test)*
+*GRAPH OF MOSAIC PLOT OF PARKS AND DAYS*
+*a. TEST 1 *
+```{r echo=FALSE}
 ggplot(data = photoUser_day) +
   geom_mosaic(aes(x=product(DAY, PARK), fill = DAY)) +
   scale_fill_manual(values=c("#27ae60","#2ecc71","#76d7c4", "#5dade2", "#2980b9", "#f39c12","#d35400"))+
@@ -365,8 +372,9 @@ ggplot(data = photoUser_day) +
         axis.text.y=element_text(size = 8),
         axis.ticks.y=element_blank(),
         axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8))
-
-#TEST 2
+```
+*b. TEST 2*
+```{r echo=FALSE}
 count <- table(photoUser_day$DAY,  photoUser_day$PARK)
 
 mosaicplot(count, main = "Daily visitor of the Swiss National Parks",
@@ -377,22 +385,24 @@ mosaicplot(count, main = "Daily visitor of the Swiss National Parks",
            border = "black",
            off = 10,
            shade = TRUE)
+```
 
-#TEST 3
+*c. TEST 3*
+```{r echo=FALSE}
+
 ggplot(daily, aes(x = PARK, y = visit_day, color = DAY)) +
   geom_point() +
   labs(x = "Days", y = "Visits") +
   scale_color_manual(name = "Days:", values=c("#27ae60","#2ecc71","#76d7c4", "#5dade2", "#2980b9", "#f39c12","#d35400")) +
   theme(legend.title = element_text(size = 14, face = 2),
         axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8))
-
-
 ```
 
 ## 5. USERS PROFILES
 *Analysis of users according the canton origin, visited park, and time span between the first and the last picture *
-```{r echo=TRUE}
-  #5.a. Canton of origin
+
+### 5.a. Canton of origin
+```{r echo=FALSE}
 canton <- ddbb %>%
   group_by(CANTON, USER)%>%
   summarise(canton_user = n())
@@ -412,9 +422,15 @@ ggplot(canton_users, aes(x=Total_Canton))+
   scale_y_continuous(breaks = seq(0, 2500, 100))
 
 ```
+*Origin of user per Canton*
+```{r echo=FALSE}
+kbl(canton_users[1:20,])%>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
 
-```{r echo=TRUE}
-  #5.b. Park of origin
+### 5.b. Park of origin
+```{r echo=FALSE}
+
 park <- ddbb %>%
   group_by(PARK, USER)%>%
   summarise(park_user = n())
@@ -435,9 +451,14 @@ ggplot(park_users, aes(x=Total_Park))+
 
 ```
 
-```{r echo=TRUE}
-  #5.c. Time span
+*Origin of user per Park*
+```{r echo=FALSE}
+ kbl(park_users[1:20,])%>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
 
+### 5.c. Time span
+```{r echo=FALSE}
 user <- ddbb %>%
   group_by(USER)%>%
   summarise(photos = n())
@@ -483,14 +504,19 @@ ggplot(time_user, aes(x=years))+
   scale_x_continuous(breaks = seq(0, 20, 1))+
   scale_y_continuous(breaks = seq(0, 5000, 500))
 
-  
-
 ```
 
-```{r echo=TRUE}
+*User timespend of taken pictures*
+```{r echo=FALSE}
+kbl(time_user[1:20,])%>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
+
+*Photos taken in the same date in the same position*
+```{r echo=FALSE}
   #5.d. Frequency of visits
 
-#Photos taken in the same date in the same position
+
 photo_date_place <- ddbb %>%
   group_by(USER, DATE, lat)%>%
   summarise(photo1day_sameplace = n())
@@ -514,9 +540,8 @@ ggplot(user_date_place, aes(x=moves1day_users))+
 
 ```
 
-```{r echo=TRUE}
-#Presence of visitors in a day, in different positions
-
+*Presence of visitors in a day, in different positions*
+```{r echo=FALSE}
 user_daily_visits <- user_date_place %>%
   group_by(USER)%>%
   summarise(user_day_stay = n())
@@ -529,24 +554,74 @@ ggplot(user_daily_visits, aes(x=user_day_stay))+
 
 ```
 
+## 6.Textual Analysis
 
-
-
-
-### Origin of user per Park
-```{r echo=TRUE}
- kbl(park_users[1:20,])%>%
-  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```{r include=FALSE}
+library(tm)
+library(SnowballC)
+library(wordcloud)
+library(RColorBrewer)
+library(tidyverse)
+library(tidytext)
+library(quanteda)
+library(igraph)
+library(reshape2)
 ```
 
-### Origin of user per Canton
-```{r echo=TRUE}
-kbl(canton_users[1:20,])%>%
-  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```{r echo=FALSE}
+base <- data.frame(ddbb$photo_id, ddbb$USER, ddbb$PARK,  ddbb$TAGS)
+names(base)[names(base) == "ddbb.PARK"] <- "doc_id"
+names(base)[names(base) == "ddbb.TAGS"] <- "text"
+names(base)[names(base) == "ddbb.USER"] <- "author"
+names(base)[names(base) == "ddbb.photo_id"] <- "origin"
+
+base$text <- tolower(base$text) # Lowercase
+base$text <- gsub("[[:digit:]]", " ", base$text) # Remove numbers
+base$text <- gsub("\\s+", " ", str_trim(base$text)) # Remove extra whitespaces
+base$text <- gsub("(\\-¨“„)", " ", base$text) # Remove extra symbols
+base$text <- gsub("(?!\\.)[[:punct:]]", " ", base$text, perl=TRUE) #remove punctuation
+base <- base[-which(is.na(base$text)),] #dropping row without TAGS
+
+
+base_source=DataframeSource(base)
+base_corpus=VCorpus(base_source)
+base_corpus_clean <- tm_map(base_corpus, removeWords, stopwords("english"))
+base_corpus_root <- tm_map(base_corpus_clean,stemDocument) #find to root of the words 
+
+
+wordcloud(base_corpus_root, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+
+#myStopwords <- setdiff(myStopwords, c("d", "e")) 
+#text_corpus_clean <- tm_map(base_corpus_clean, removeWords, myStopwords)
+
+
+dtm <- DocumentTermMatrix(base_corpus_root, control= list(wordLengths=c(3, 8)))
+head(sort(slam::col_sums(dtm), decreasing = TRUE), n=10)
+```
+*Head plot of frequencies of words*
+```{r echo=FALSE}
+Heaps_plot(dtm)
+
 ```
 
-### User timespend of taken pictures
-```{r echo=TRUE}
-kbl(time_user[1:20,])%>%
-  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+*Zipf law plot of frequencies of words*
+```{r echo=FALSE}
+Zipf_plot(dtm)
+
+```
+
+```{r echo=FALSE}
+dtm_df <- reshape2::melt(as.matrix(dtm))
+# remove 0 values and order the data.frame
+dtm_df <- dtm_df[dtm_df$value > 0, ]
+dtm_df <- dtm_df[order(dtm_df$value, decreasing = TRUE), ]
+
+
+
+
 ```
