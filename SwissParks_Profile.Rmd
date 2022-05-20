@@ -37,6 +37,12 @@ output:
 #install.packages("quanteda")
 #install.packages("igraph")
 #install.packages("reshape2")
+#install.packages("spectralGraphTopology")
+#install.packages("viridis")
+#install.packages("corrplot")
+#install.packages("ergm")
+#install.packages("statnet")
+
 ```
 
 ```{r include=FALSE}
@@ -561,14 +567,20 @@ library(tm)
 library(SnowballC)
 library(wordcloud)
 library(RColorBrewer)
-library(tidyverse)
 library(tidytext)
 library(quanteda)
 library(igraph)
 library(reshape2)
+library(spectralGraphTopology)
+library(viridis)
+library(corrplot)
+library(ergm)
+library(statnet)
+
 ```
 
 ```{r echo=FALSE}
+set.seed(42)
 base <- data.frame(ddbb$photo_id, ddbb$USER, ddbb$PARK,  ddbb$TAGS)
 names(base)[names(base) == "ddbb.PARK"] <- "doc_id"
 names(base)[names(base) == "ddbb.TAGS"] <- "text"
@@ -618,10 +630,16 @@ Zipf_plot(dtm)
 ```{r echo=FALSE}
 dtm_df <- reshape2::melt(as.matrix(dtm))
 # remove 0 values and order the data.frame
-dtm_df <- dtm_df[dtm_df$value > 0, ]
+dtm_df <- dtm_df[dtm_df$value > 2, ]
 dtm_df <- dtm_df[order(dtm_df$value, decreasing = TRUE), ]
+```
 
+```{r echo=FALSE}
+set.seed(42)
 
+g <- graph.data.frame(dtm_df, directed = FALSE)
+#bg <-bipartite.mapping(g)
 
+plot(g)
 
 ```
