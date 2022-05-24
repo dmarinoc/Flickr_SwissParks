@@ -196,11 +196,12 @@ summary(photos)
 users_flickr <- ddbb %>%
   group_by(PARK, USER) %>%
   summarise(user_photos =  n())
-  #Counting the total area of parks
+
+#The proportion of user per park
 users_flickr <- users_flickr %>%
   group_by(PARK) %>%
   summarise(user = n())%>%
-  mutate(ratio_users= round((user / sum(user))*100, 3)) %>% 
+  mutate(ratio_users= round((user / sum(user))*100, 1)) %>% 
   arrange(desc(ratio_users))
 
 #The total area of parks:
@@ -213,7 +214,8 @@ summary(users_flickr)
 *d. Statistic of area (km2), users and photos for each Swiss National Parks:*
 *NOTE: THESE VALUES ONLY CONSIDER THE NATURAL LAND COVER  (the dismissed categories are: Building area", "Traffic and transportation surface", "Special settlement areas", "Recreation and green spaces"*
 ```{r echo=FALSE}
-general <- data.frame("Parks"= area$PARK, "km"= area$km, "Photos"= photos$photo, "Photos_per"= photos$ratio_photos, "Photos_km"=round((photos$photo/area$km),2),"Users"=users_flickr$user, "Users_per"=users_flickr$ratio_users, "Users_km"=round((users_flickr$user/area$km),2))
+general <- data.frame("Parks"= area$PARK, "Area(km2)"= area$km, "#Flickr"= photos$photo, "%Flickr"= photos$ratio_photos, "Flickr/km2"=round((photos$photo/area$km),2),"#Users"=users_flickr$user, "%Users"=users_flickr$ratio_users, "Users/km2"=round((users_flickr$user/area$km),2), 
+                      check.names=FALSE)
 
 kbl(general)%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
@@ -237,8 +239,8 @@ ggplot(data = yearly_counts, aes(x = YEAR, y = VISITS, group = 1)) +
     geom_line() +
     facet_wrap(vars(PARK), labeller = label_wrap_gen(width=24))+
     theme_bw()+
-    theme(axis.text.x = element_text(colour = "grey20", size = 7, angle = 90, hjust = 0.5, vjust = 0.5),
-          axis.text.y = element_text(colour = "grey20", size = 7),
+    theme(axis.text.x = element_text(colour = "grey20", size = 6, angle = 90, hjust = 0.5, vjust = 0.5),
+          axis.text.y = element_text(colour = "grey20", size = 6),
           strip.text = element_text(face = "italic"),
           text = element_text(size = 12))
 
@@ -248,9 +250,8 @@ ggplot(data = yearly_counts, aes(x = YEAR, y = VISITS, group = 1)) +
 *Number of users per season in each Swiss National Parks*
 
 ```{r echo=FALSE}
-#Creating season column
-
- #create dates variable for your column that contains dates 
+#Values graph of number of users per season
+#create dates variable for your column that contains dates 
 dates <- ddbb$DATE
 #get the month of the date, create new column called month
 ddbb$month<-(month(dates, label=TRUE))
@@ -266,24 +267,20 @@ season <- ddbb %>%
   summarise(visit_season = n())
 
   #Counting the number of users per park in each season
-season <- season %>%
+season_num <- season %>%
   group_by(PARK, SEASON) %>%
-  summarise(season_users = n())
+  summarise(user = n())
 
-sp<- pivot_wider(season, names_from = SEASON, values_from = season_users)
+sp<- pivot_wider(season_num, names_from = SEASON, values_from = user)
 season_park <- data.frame(sp)
 
-  #Display of the table with a better format
-kbl(season_park)%>%
-  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
-
-
   #Stacked normalized horizontal bar graph
-season_park %>% pivot_longer(-PARK) %>%
-  ggplot(aes(x = factor(PARK), y = value, fill = name, group = name))+
+sp %>% pivot_longer(-PARK) %>% 
+  mutate(name = factor(name, levels = c("AUTUMN", "SUMMER", "SPRING", "WINTER"))) %>%
+  ggplot(aes(x = factor(PARK), y = value, fill=name, group=name))+
   geom_bar(stat='identity', color='white', position='fill')+
   scale_y_continuous(labels = scales::percent)+
-  scale_fill_manual(values=c("#ed7c31", "#00b04f", "#ffbf00","#00b0f0"))+
+  scale_fill_manual(values=c("#ed7c31", "#00b04f","#ffbf00", "#00b0f0"))+
   theme(legend.position = 'bottom',
         panel.grid.minor = element_blank(),
         panel.border = element_blank(),
@@ -292,6 +289,28 @@ season_park %>% pivot_longer(-PARK) %>%
   xlab('Swiss National Parks') + ylab('% visitors') +
   labs( fill = "SEASONS")+
   ggtitle('Proportion of visitors per Season')
+
+
+```
+
+*Percentage table of Users according season in Parks*
+
+```{r echo=FALSE}
+
+#The proportion of user per park
+season_uper <- season %>%
+  group_by(PARK, SEASON) %>%
+  summarise(user = n())%>%
+  mutate(ratio_users= round((user / sum(user))*100, 1))
+
+season_per <- subset(season_uper, select=-c(user))
+
+sp_per<- pivot_wider(season_per, names_from = SEASON, values_from = ratio_users)
+season_park_per <- data.frame(sp_per)
+
+  #Display of the table with a better format
+kbl(season_park_per)%>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 
 ```
 
