@@ -280,7 +280,7 @@ sp %>% pivot_longer(-PARK) %>%
   ggplot(aes(x = factor(PARK), y = value, fill=name, group=name))+
   geom_bar(stat='identity', color='white', position='fill')+
   scale_y_continuous(labels = scales::percent)+
-  scale_fill_manual(values=c("#ed7c31", "#00b04f","#ffbf00", "#00b0f0"))+
+  scale_fill_manual(values=c("#ed7c31", "#ffbf00", "#00b04f", "#00b0f0"))+
   theme(legend.position = 'bottom',
         panel.grid.minor = element_blank(),
         panel.border = element_blank(),
