@@ -596,7 +596,7 @@ library(igraph)
 library(reshape2)
 ```
 
-```{r echo=TRUE}
+```{r echo=FALSE}
 
 set.seed(42)
 
