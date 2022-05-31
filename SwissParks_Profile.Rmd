@@ -4,8 +4,7 @@ title: "Analysis of Swiss National Parks with Flickr data"
 author: "Daniela Marino"
 date: "5/2/2022"
 output: 
-  html_document: default
-  
+  html_document
 ---
 
 *Notes:*
@@ -14,7 +13,7 @@ output:
 
 
 *PACKAGES*
-```{r echo=TRUE}
+```{r echo=FALSE}
 #PACKAGES
 #install.packages("tidyverse")
 #install.packages("magrittr")
@@ -53,17 +52,19 @@ library(scales)
 
 ### DATA LOADING
 ```{r echo=TRUE}
-#Data source
+#Data loading: we need to define the column type, to ensure that date is in the correct form.
 flickr <- read_xlsx(here("Flickr_Data.xlsx"), col_types = c("numeric", "text", "numeric", 
         "numeric", "text", "date", "numeric", 
         "text", "numeric", "text", "text", 
         "text", "text", "text", "text", "text", 
         "text"))# explore data
 
+#General statistics of each column
 summary(flickr)
 ```
 
 ```{r include=TRUE}
+#The library dplyr provide several notifications/observations, so we are going to avoid to write in the report.
 options(dplyr.summarise.inform = FALSE)
 ```
 
@@ -72,12 +73,14 @@ options(dplyr.summarise.inform = FALSE)
 #### a. Only pictures taken after 2004 (inclusive)
 
 ```{r echo=TRUE}
-# using subset function
 
-flickr_04 <- as_tbl_time(flickr, index = DATE)
+# Creating a subset of the data, just for picture that were taken after 2004
 
-flickr_04 <- filter(flickr_04, DATE >= as.Date("2004-01-01"))
+flickr_04 <- as_tbl_time(flickr, index = DATE) #We identify the date as an index
 
+flickr_04 <- filter(flickr_04, DATE >= as.Date("2004-01-01")) # we create a new dataframe just for the data after 2004
+
+#General statistics of each column
 summary(flickr_04)
 
 ```
@@ -86,48 +89,44 @@ summary(flickr_04)
 
 ```{r echo=TRUE}
 
-flickr_04nat <- filter(flickr_04, USE!=100, USE!=120, USE!=140, USE!=160)
+# Using the table obtained before, we create another subset avoiding the pictures in the land cover 100, 120, 140, 160
+# The pictures that are in land cover related to natural categories were considered
+flickr_04nat <- filter(flickr_04, USE!=100, USE!=120, USE!=140, USE!=160) # The expression USE! means avoid/reduce
 
+#General statistics of each column
 summary(flickr_04nat)
 ```
 
 ## INTRODUCTION
 
 ```{r echo=TRUE}
-#Option 1 = Application of the filter of the use, only natural land cover
+# Application of the filter of the use, only natural land cover
   
-db <- flickr_04nat
+db <- flickr_04nat #We create a copy for future use
 
-ddbb <- db
+ddbb <- db # We create another copy for future use
   
-#Option 2 = No application of the filter of the use, all land cover types
-
-#ddbb <- flickr_04
-
-
-#Option 3 = Using all dataset with no filters (after 2004 and land cover)
-
-#ddbb <- flickr
-
 ```
 
 *a. Number of visitors each Swiss National Parks, according the land cover, *
    *NA values refers to users or land cover category that doesn't exist  in the park*
 ```{r echo=TRUE}
+
+#Filtering with a dynamic table to identify the parks, user, and the land cover.
 landcover <- flickr_04 %>%
   group_by(PARK, USE, USER)%>%
-  summarise(land_user = n())
+  summarise(land_picture = n()) #Total number of picture in a land cover, per park, taken by a user.
 
-  #Counting the number of users per park in each season
+#Counting the number of users per park in each land cover
 landcover <- landcover %>%
   group_by(PARK, USE) %>%
-  summarise(land = n())
+  summarise(park_landcover = n()) #Total number of user who took pictures in a land cover per park.
 
-lu<- pivot_wider(landcover, names_from = USE, values_from = land)
-landcover_park <- as.data.frame(lu)
+#Pivot table that create a matrix of park (rows) and land cover (columns)
+lu<- pivot_wider(landcover, names_from = USE, values_from = park_landcover)
+landcover_park <- as.data.frame(lu) # We transform the matrix into a dataframe 
 
-  #Rename of the codes (numbers) with the names of the days
-
+#Rename of the codes (numbers) with the names of the days
     #Land cover categories that are reduced
 names(landcover_park)[names(landcover_park)=="100"] <- "Building area"
 names(landcover_park)[names(landcover_park)=="120"] <- "Traffic and transportation surface"
@@ -142,41 +141,54 @@ names(landcover_park)[names(landcover_park)=="300"] <- "Forest"
 names(landcover_park)[names(landcover_park)=="400"] <- "Lakes and rivers"
 names(landcover_park)[names(landcover_park)=="420"] <- "Unproductives"
 
-  #Display of the table with a better format
+#Organizing the table by alphabetical order of Parks names
+landcover_park <- landcover_park %>% arrange(PARK)
+#Exporting the table to csv in the root folder
+write.csv(landcover_park,"C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\LandCover.csv", row.names = FALSE)
+
+#Displaying  the table with a better format
 kbl(landcover_park)%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 ```
 
 *b. Area (km2) of national parks*
 ```{r echo=TRUE}
-area <- ddbb %>%
+
+#Filtering in a dynamic table to extract Park and square area
+#We need this step because some parks have several polygons (with different square area)
+#So the extracted information of square area is provided by the surface of each polygon
+#where the points (Flickr pictures) where located.
+area_portions <- ddbb %>%
   group_by(PARK, km2) %>%
-  summarise(flickr_feature = n())
+  summarise(photos_km = n())
 
-  #Counting the total area of parks
-area <- area %>%
+  #Summarizing the total area of the polygons that compose the parks where the points where located.
+area_park <- area_portions %>%
   group_by(PARK) %>%
-  summarise(km = round(sum(km2),2))
+  summarise(km = round(sum(km2),2)) #Round for having just two decimals, and sum for adding all polygons surface 
 
-#The total area of parks:
-area %>%
+# Obtaining the total area (km2) covered by all parks:
+area_park %>%
   summarize(area = sum(km))#km2
 
-summary(area)
+summary(area) #Statistical summary of area (km2)
 ```
 
 *c. Count of pictures in the parks*
 ```{r echo=TRUE}
+
+#Filtering in a dynamic table to extract the number of pictures per Park
 photos <- ddbb %>%
   group_by(PARK) %>%
-  summarise(photo = n()) %>%
-  mutate(ratio_photos= round((photo / sum(photo))*100, 3)) %>% 
-  arrange(desc(ratio_photos))
+  summarise(photo = n()) %>% #Total number of pictures per park
+  mutate(ratio_photos= round((photo / sum(photo))*100, 2)) %>% #Percentage with 2 decimal of pictures 
+  arrange(desc(ratio_photos)) #Sort the table per percentage of pictures
 
-#The total number of pictures is:
+#Filtering in a dynamic table to extract Park and square area#The total number of pictures is:
 ddbb %>%
-  summarize(count =  n())#pictures
+  summarize(count =  n()) #pictures
 
+#Statistical summary of pictures
 summary(photos)
 ```
 
@@ -189,7 +201,7 @@ users_flickr <- ddbb %>%
 users_flickr <- users_flickr %>%
   group_by(PARK) %>%
   summarise(user = n())%>%
-  mutate(ratio_users= round((user / sum(user))*100, 3)) %>% 
+  mutate(ratio_users= round((user / sum(user))*100, 2)) %>% 
   arrange(desc(ratio_users))
 
 #The total area of parks:
@@ -202,13 +214,40 @@ summary(users_flickr)
 *d. Statistic of area (km2), users and photos for each Swiss National Parks:*
 *NOTE: THESE VALUES ONLY CONSIDER THE NATURAL LAND COVER  (the dismissed categories are: Building area", "Traffic and transportation surface", "Special settlement areas", "Recreation and green spaces"*
 ```{r echo=TRUE}
-general <- data.frame("Parks"= area$PARK, "km"= area$km, "Photos"= photos$photo, "Photos_per"= photos$ratio_photos, "Photos_km"=round((photos$photo/area$km),2),"Users"=users_flickr$user, "Users_per"=users_flickr$ratio_users, "Users_km"=round((users_flickr$user/area$km),2))
+general <- data.frame("Parks"= area_park$PARK, "km2"= area_park$km, "Photos"= photos$photo, "Photos_per"= photos$ratio_photos, "Photos_km"=round((photos$photo/area$km),2),"Users"=users_flickr$user, "Users_per"=users_flickr$ratio_users, "Users_km"=round((users_flickr$user/area$km),2))
 
-kbl(general)%>%
+general <- general %>% arrange(Parks)
+
+kbl(general) %>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 
 write.csv(general,"C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\General.csv", row.names = FALSE)
+
 ```
+## a. CONTRIBUTION OF USERS
+```{r echo=TRUE}
+
+contrib <- ddbb %>%
+  group_by(PARK, USER)%>%
+  summarise(photo = n())
+summary(contrib)
+
+ggplot(contrib, aes(x=log(photo))) + 
+  geom_histogram(aes(y=(..count..)/sum(..count..)),
+                 binwidth = .1,
+                 colour="black", fill="white")+
+  facet_wrap(vars(PARK), labeller = label_wrap_gen(width=24))+
+  theme_bw()+
+  theme(axis.text.x = element_text(colour = "grey20", size = 6, angle = 90, hjust = 0.5, vjust = 0.5),
+          axis.text.y = element_text(colour = "grey20", size = 6),
+          strip.text = element_text(face = "italic"),
+          text = element_text(size = 10))
+
+x <-contrib$photo
+y <- x + rnorm(2500, 0, 50)   
+qqplot(x, y) 
+```
+
 ## 1. YEARLY VISITOR IN THE PARKS
 ```{r echo=TRUE}
 
@@ -223,15 +262,17 @@ year_photo <- ddbb %>%
 yearly_counts <- year_photo %>%
   group_by(PARK, YEAR)%>%
   summarise(VISITS = n())
-            
+
+#png("C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\general_trend.png")       
+
 ggplot(data = yearly_counts, aes(x = YEAR, y = VISITS, group = 1)) +
     geom_line() +
     facet_wrap(vars(PARK), labeller = label_wrap_gen(width=24))+
     theme_bw()+
-    theme(axis.text.x = element_text(colour = "grey20", size = 7, angle = 90, hjust = 0.5, vjust = 0.5),
-          axis.text.y = element_text(colour = "grey20", size = 7),
+    theme(axis.text.x = element_text(colour = "grey20", size = 6, angle = 90, hjust = 0.5, vjust = 0.5),
+          axis.text.y = element_text(colour = "grey20", size = 6),
           strip.text = element_text(face = "italic"),
-          text = element_text(size = 12))
+          text = element_text(size = 10))
 
 ```
 
@@ -263,13 +304,16 @@ season <- season %>%
 
 sp<- pivot_wider(season, names_from = SEASON, values_from = season_users)
 season_park <- data.frame(sp)
+season_park <- season_park %>% arrange(PARK)
 
   #Display of the table with a better format
 kbl(season_park)%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 
-
   #Stacked normalized horizontal bar graph
+
+#png("C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\season_park.png")       
+
 season_park %>% pivot_longer(-PARK) %>%
   ggplot(aes(x = factor(PARK), y = value, fill = name, group = name))+
   geom_bar(stat='identity', color='white', position='fill')+
@@ -289,7 +333,6 @@ season_park %>% pivot_longer(-PARK) %>%
 ## 3. PARK VISITORS PER DAY OF THE WEEK
 *Number of visitors per day in each Swiss National Parks*
 ```{r echo=TRUE}
-
 ddbb$DAY <- weekdays(as.Date(ddbb$DATE))
 ddbb$DAY <- factor(ddbb$DAY, levels = c("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"))
 #
@@ -305,20 +348,23 @@ daily <- photoUser_day %>%
 sd<- pivot_wider(daily, names_from = DAY, values_from = visit_day)
 
 daily_park <- as.data.frame(sd)
+daily_park <- daily_park %>% arrange(PARK)
 
   #Display of the table with a better format
 kbl(daily_park)%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+
+write.csv(daily_park,"C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\Daily_Park.csv", row.names = FALSE)
+
 ```
 
 *Bar plot of visitors per day in the Parks*
-```{r setup, include=TRUE}
-
+```{r setup, include=FALSE}
 # Chunk options
 knitr::opts_chunk$set(
  fig.width = 10,
  fig.asp = 0.9,
- out.width = "100%"
+ out.width = "95%"
 )
 ```
 
@@ -345,6 +391,8 @@ theme_base <- function(base_size = 14) {
 ```{r echo=TRUE}
   #Horizontal bar chart of daily number of visitors per Park
 
+#png("C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\daily_park.png")       
+
 daily_park %>% 
   pivot_longer(-PARK)  %>% 
 ggplot(aes(x = factor(PARK), y = value, fill = name, group = name)) +
@@ -362,6 +410,8 @@ ggplot(aes(x = factor(PARK), y = value, fill = name, group = name)) +
   #GRAPH OF MOSAIC PLOT OF PARKS AND DAYS
 
 #TEST 1: 
+#png("C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\daily_park_Mosaic1.png")       
+
 ggplot(data = photoUser_day) +
   geom_mosaic(aes(x=product(DAY, PARK), fill = DAY)) +
   scale_fill_manual(values=c("#27ae60","#2ecc71","#76d7c4", "#5dade2", "#2980b9", "#f39c12","#d35400"))+
@@ -370,35 +420,25 @@ ggplot(data = photoUser_day) +
         axis.text.y=element_text(size = 8),
         axis.ticks.y=element_blank(),
         axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8))
+```
 
-#TEST 2
-count <- table(photoUser_day$DAY,  photoUser_day$PARK)
+```{r echo=TRUE}
+#TEST 2:
+#png("C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\daily_park_Mosaic2.png")       
 
-mosaicplot(count, main = "Daily visitor of the Swiss National Parks",
-           sub = "Product of visitors",
-           xlab = "Days",
-           ylab = "Parks",
-           las = 1,
-           border = "black",
-           off = 10,
-           shade = TRUE)
-
-#TEST 3
 ggplot(daily, aes(x = PARK, y = visit_day, color = DAY)) +
   geom_point() +
   labs(x = "Days", y = "Visits") +
   scale_color_manual(name = "Days:", values=c("#27ae60","#2ecc71","#76d7c4", "#5dade2", "#2980b9", "#f39c12","#d35400")) +
   theme(legend.title = element_text(size = 14, face = 2),
         axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8))
-
-
 ```
 
 ## 5. USERS PROFILES
 *Analysis of users according the canton origin, visited park, and time span between the first and the last picture *
 
 ### 5.a. Canton of origin
-```{r echo=FALSE}
+```{r echo=TRUE}
 canton<- ddbb %>%
   group_by(CANTON, USER)%>%
   summarise(canton_user = n())
@@ -421,7 +461,7 @@ ggplot(canton_users, aes(x=Total_Canton))+
 
 #Heatmap
 
-coul <- colorRampPalette(c("beige", "green"))(2)
+coul <- colorRampPalette(c("beige", "green"))(10)
 
 rownames(canton_users) <- canton_users[,1]
 canton_users[,1]<- NULL
@@ -430,16 +470,16 @@ data <-as.matrix(canton_users)
 
 heatmap(data, Colv = NA, Rowv = NA, scale = "column", col = coul, main = "Heatmap of User per Canton")
 
-
 ```
-*Origin of user per Canton*
-```{r echo=FALSE}
-kbl(canton_users[1:20,])%>%
-  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+
+```{r echo=TRUE}
+#Origin of user per Canton*
+#kbl(canton_users[1:20,])%>%
+#  kable_styling(bootstrap_options = "striped", full_width = F, #position = "left")
 ```
 
 ### 5.b. Park of origin
-```{r echo=FALSE}
+```{r echo=TRUE}
 park <- ddbb %>%
   group_by(PARK, USER)%>%
   summarise(park_user = n())
@@ -462,7 +502,7 @@ ggplot(park_users, aes(x=Total_Park))+
 
 #Heatmap
 
-coul <- colorRampPalette(c("beige", "blue"))(2)
+coul <- colorRampPalette(c("beige", "blue"))(10)
 
 rownames(park_users) <- park_users[,1]
 park_users[,1]<- NULL
@@ -473,14 +513,15 @@ heatmap(data, Colv = NA, Rowv = NA, scale = "column", col = coul, main = "Heatma
 
 ```
 
-*Origin of user per Park*
-```{r echo=FALSE}
- kbl(park_users[1:20,])%>%
-  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+
+```{r echo=TRUE}
+#Origin of user per Park*
+# kbl(park_users[1:20,])%>%
+#  kable_styling(bootstrap_options = "striped", full_width = F, #position = "left")
 ```
 
 ### 5.c. Time span
-```{r echo=FALSE}
+```{r echo=TRUE}
 user <- ddbb %>%
   group_by(USER)%>%
   summarise(photos = n())
@@ -529,14 +570,15 @@ ggplot(time_user, aes(x=years))+
 write.csv(time_user,"C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\Time_Users.csv", row.names = FALSE)
 ```
 
-*User timespend of taken pictures*
-```{r echo=FALSE}
-kbl(time_user[1:20,])%>%
-  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+
+```{r echo=TRUE}
+#User timespend of taken pictures
+#kbl(time_user[1:20,])%>%
+#  kable_styling(bootstrap_options = "striped", full_width = F, #position = "left")
 ```
 
 *Photos taken in the same date in the same position*
-```{r echo=FALSE}
+```{r echo=TRUE}
   #5.d. Frequency of visits
 photo_date_place <- ddbb %>%
   group_by(USER, DATE, lat)%>%
@@ -560,7 +602,7 @@ ggplot(user_date_place, aes(x=moves1day_users))+
 ```
 
 *Presence of visitors in a day, in different positions*
-```{r echo=FALSE}
+```{r echo=TRUE}
 user_daily_visits <- user_date_place %>%
   group_by(USER)%>%
   summarise(user_day_stay = n())
@@ -573,7 +615,6 @@ ggplot(user_daily_visits, aes(x=user_day_stay))+
 ```
 
 ## Textual Analysis
-
 ```{r include=FALSE}
 # Install Packages
 #install.packages("tm") # for text mining
@@ -596,8 +637,7 @@ library(igraph)
 library(reshape2)
 ```
 
-```{r echo=FALSE}
-
+```{r echo=TRUE}
 set.seed(42)
 
 base <- data.frame(ddbb$photo_id, ddbb$USER, ddbb$PARK,  ddbb$TAGS)
@@ -605,6 +645,7 @@ names(base)[names(base) == "ddbb.PARK"] <- "doc_id"
 names(base)[names(base) == "ddbb.TAGS"] <- "text"
 names(base)[names(base) == "ddbb.USER"] <- "author"
 names(base)[names(base) == "ddbb.photo_id"] <- "origin"
+
 base$text <- tolower(base$text) # Lowercase
 base$text <- gsub("[[:digit:]]", " ", base$text) # Remove numbers
 base$text <- gsub("\\s+", " ", str_trim(base$text)) # Remove extra whitespaces
@@ -638,15 +679,16 @@ Zipf_plot(dtm)
 ```
 
 *Bipartite network of parks and tags*
-```{r echo=FALSE}
+```{r echo=TRUE}
 dtm_df <- reshape2::melt(as.matrix(dtm))
 # remove 0 values and order the data.frame
 dtm_df <- dtm_df[dtm_df$value > 2, ]
 dtm_df <- dtm_df[order(dtm_df$value, decreasing = TRUE), ]
 ```
 
-```{r echo=FALSE}
+```{r echo=TRUE}
 set.seed(42)
 g <- graph.data.frame(dtm_df, directed = FALSE)
 #bg <-bipartite.mapping(g)
 plot(g)
+```
