@@ -10,11 +10,10 @@ output:
 *Notes:*
   *Data: 2020-11-03_Switzerland_upto_2018-11-31, Switzerland_2018-12-01_2020-11-03.*
   *Pre-processing: After gathering the data, the two datasets were merged and it was cleaned the duplicates and empty values, specially for dates*
-
-
+  
 *PACKAGES*
 ```{r echo=FALSE}
-#PACKAGES
+#PACKAGES INSTALATION
 #install.packages("tidyverse")
 #install.packages("magrittr")
 #install.packages("dplyr")
@@ -23,12 +22,36 @@ output:
 #install.packages("skimr")
 #install.packages("kableExtra")
 #install.packages("knitr")
-#install.packages(magrittr)
-#install.packages(lubridate)
+#install.packages("magrittr")
+#install.packages("lubridate")
+#install.packages("ggplot2")
 #install.packages("stringr")
 #install.packages("tibbletime")
 #install.packages("ggmosaic")
 #install.packages("scales")
+#install.packages("stringr")  
+#install.packages("dplyr")
+#install.packages("tidyverse")
+#install.packages("lubridate")
+#install.packages("rgeos")     
+#install.packages("rgdal")     
+#install.packages("maptools")  
+#install.packages("scales")
+#install.packages("ggplot2")
+#install.packages("sf")
+#install.packages(""terra"")
+#install.packages("spData")
+#install.packages("rspatial")
+#install.packages("raster")
+#install.packages("sp")
+#install.packages("igraph")
+#install.packages("tm") # for text mining
+#install.packages("SnowballC") # for text stemming
+#install.packages("wordcloud") # word-cloud generator 
+#install.packages("RColorBrewer") # color palettes
+#install.packages("quanteda")
+#install.packages("reshape2")
+
 ```
 
 ```{r include=FALSE}
@@ -48,19 +71,267 @@ library(stringr)
 library(tibbletime)
 library(ggmosaic)
 library(scales)
+library("stringr")  
+library(dplyr)
+library(tidyverse)
+library(lubridate)
+library(rgeos)     # intersect for data and shapefile
+library(rgdal)     # load shapefiles
+library(maptools)  # fortify shapefiles for ggplot
+library(scales)
+library(ggplot2)
+library(sf)
+library(terra)
+library(spData)
+library(rspatial)
+library(raster)
+library(sp)
+library(igraph)
+library(tm)
+library(SnowballC)
+library(wordcloud)
+library(RColorBrewer)
+library(tidytext)
+library(quanteda)
+library(reshape2)
 ```
 
-### DATA LOADING
+
+# 1. RAW DATA PROCESSING
 ```{r echo=TRUE}
-#Data loading: we need to define the column type, to ensure that date is in the correct form.
-flickr <- read_xlsx(here("Flickr_Data.xlsx"), col_types = c("numeric", "text", "numeric", 
-        "numeric", "text", "date", "numeric", 
-        "text", "numeric", "text", "text", 
-        "text", "text", "text", "text", "text", 
-        "text"))# explore data
+#CLEANING PROCESS TO JOIN GATHERED DATA FROM FLICKR
+
+#data <- read.csv("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Raw Data/2020-11-03_Switzerland_upto_2018-11-31.csv", encoding = "UTF-8" )
+#saveRDS(data, "//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Raw Data/Compile_2018-11-03.rds")
+
+#data2 <- read.csv("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Raw Data/Switzerland_2018-12-01_2020-11-03.csv", encoding = "UTF-8")
+#saveRDS(data2, "//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Raw Data/Update_2020-11-03.rds")
+
+# export dataframes to backup the main tables
+#d1 <- readRDS("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Raw Data/Compile_2018-11-03.rds")
+#d2 <- readRDS("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Raw Data/Update_2020-11-03.rds")
+
+#Join two dataset in a single main dataframe
+#raw <-  dplyr::bind_rows(d1, d2)
+
+#raw$tags <- gsub(";", "  ", raw$tags) # Remove symbol in column tags
+#raw$post_title <- gsub(";", "  ", raw$post_title) # Remove symbol in column post_title
+#raw$post_body <- gsub(";", "  ", raw$post_body) # Remove symbol in column post_body
+
+#raw_clean <- subset(raw, select= c("post_guid", "longitude", "latitude", "user_guid", "post_create_date", "post_publish_date", "tags", "post_title", "post_body", "place_guid"))
+
+#raw_clean <- distinct(raw_clean, post_guid, .keep_all = TRUE)
+#raw_clean <- filter(raw_clean, longitude >= 0.0001) 
+
+#Export the total table for future applications
+#write.table(raw_clean,"~/GitHub/Flickr_SwissParks/Join2018-2020.csv", sep=";", dec=".")
+```
+
+## 1.1 FUNCTIONS
+```{r echo=TRUE}
+# define root folders for data
+root_folder <- '~/GitHub/Flickr_SwissParks/'    # local folder 
+setwd<- '~/GitHub/Flickr_SwissParks/'
+
+# set coordinate referencing system (for changing CRS but not reprojecting)
+crs_wgs84 <- "+init=epsg:4326"  # lat/lng
+crs_sng <- "+init=epsg:2056"    # Swiss National, CH1903+ / LV95
+
+# set coordinate referencing system (for changing CRS but not reprojecting)
+crs_wgs84 <- "+init=epsg:4326"  # lat/lng
+crs_osm <- "+init=epsg:3857"    # OSM projection
+crs_bng <- "+init=epsg:27700"   # British National Grid, BNG
+crs_sng <- "+init=epsg:2056"    # Swiss National, CH1903+ / LV95
+
+# Set coordinate systems for reprojecting
+proj_wgs84 <- '+proj=longlat +datum=WGS84'
+proj_osm <- '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs'
+proj_bng <- '+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +datum=OSGB36 +units=m +no_defs'
+proj_sng <- '+proj=somerc +lat_0=46.95240555555556 +lon_0=7.439583333333333 +k_0=1 +x_0=2600000 +y_0=1200000 +ellps=bessel +towgs84=674.374,15.056,405.346,0,0,0,0 +units=m +no_defs'
+
+# set point at which plot will switch from standard form
+options(scipen=7)
+
+# chart theme
+t <- theme_bw() + 
+  theme(panel.border=element_blank(),    # removes border around chart area
+        axis.text = element_text(size = 10, colour='#444444'),
+        axis.ticks = element_line(colour='gray'))
+
+# reproject from lat/lng (WGS84) to another CRS
+# ---------------------------------------------
+# requires columns labeled 'lat', 'lng' in first two columns, and at least two other columns (4 cols minimum)
+reproject <- function(df, proj_crs) {
+  
+  dataset_map_coords <- df[c("lng", "lat")]  # specifying names to avoid mixing x and y up in order...
+  dataset_map_data <- df[ ,c(3:ncol(df))]    
+  dataset_map <- SpatialPointsDataFrame(coords=dataset_map_coords, data=dataset_map_data)
+  
+  # set CRS and reproject to OSM for OSM number system
+  dataset_map@proj4string # check first, should be NA - not yet been set
+  proj4string(dataset_map) <- CRS(crs_wgs84)  # set the current coordinates system
+  dataset_map <- spTransform(dataset_map, CRS(proj_crs))  # reproject to new CRS
+  
+  # convert back to dataframe with reprojected cooordinates and then amend to original dataset
+  newdf <- as.data.frame(dataset_map)
+  names(newdf)[names(newdf) == "lng"] <- 'crs_x'; 
+  names(newdf)[names(newdf) == "lat"] <- 'crs_y'        
+  newdf <- newdf[, c("crs_x", "crs_y")]   # just want to keep the reprojected coordinates to append back to dataset
+  df <- cbind(df, newdf)
+  return(df)
+}
+
+
+# load in the data files and standardise lat/lng column name for reproject
+# ---------------------------------------
+# load data file, rename coordinates columns
+loaddata <- function(input_file) {
+  
+  folder <- paste0(root_folder, '')
+  input_data <- paste0(folder, input_file)
+  df <- read.csv(input_data, sep = ";", na.strings="0")
+  
+  # rename latitude and longitude columns to lat and lng
+  names(df)[names(df) == "latitude"] <- "lat"
+  names(df)[names(df) == "longitude"] <- "lng"
+  
+  return(df)
+}
+
+```
+
+## 1.2 LOAD DATA
+```{r echo=TRUE}
+#Run the functions with the raw data
+input_file <- 'Join2018-2020.csv'
+orig <- loaddata(input_file)
+orig$lat <- as.numeric(as.character(orig$lat))
+orig$lng <- as.numeric(as.character(orig$lng))
+orig$is_na = ifelse(is.na(orig$lat), TRUE, FALSE)
+orig<-orig[!(orig$is_na=="TRUE"),]
+
+```
+
+### 1.2.1 PREPARATION OF THE DATASET
+
+```{r echo=TRUE}
+# Drop unneeded columns and rows to slim the dataset
+# -----------------------------------------
+
+#### a. Only pictures taken after 2004 (inclusive)
+# Creating a subset of the data, just for picture that were taken after 2004
+df <- orig
+df$post_create <- as.Date(df$post_create_date)
+reduced_04 <- filter(df, post_create >= "2004-01-01") # we create a new dataframe just for the data after 2004
+reduced_04 <- filter(reduced_04, post_create <= "2020-11-03") # we create a new dataframe just for the data after 2004
+trimmed <- reduced_04
+rm(df)
+
+# add in reprojection to CH1903+ / LV95
+# -------------------------------------
+# slice off min. fields to acquire reprojection coords, then rejoin to dataset
+# order matters: need lat and lng in first two fields + two other fields for data (any will do)
+df <- trimmed[, c(3, 2, 1, 4:10)]
+proj_crs <- proj_sng  # reproject from WGS84 to Swiss nat.coords 
+df <- reproject(df, proj_crs)
+
+df <- df[, c(11:12)]  # just keep the new coords and then merge back into source
+trimmed <- cbind(trimmed, df)
+trimmed <- trimmed[, c(1, 4:10, 13,14)]
+rm(df)
+
+# rename latitude and longitude columns to lat and lng
+names(trimmed)[names(trimmed) == "crs_y"] <- "lat"
+names(trimmed)[names(trimmed) == "crs_x"] <- "lng"
+df <-  trimmed
+
+```
+
+### 1.2.2 SNIP TO DATA WITHIN SWISS BORDERS
+```{r echo=TRUE}
+# create SpatialPointsPolygon for data
+df_map_coords <- df[c("lng", "lat")]
+df_map_data <- df[ ,c(1:8)]
+df_map <- SpatialPointsDataFrame(coords=df_map_coords, data=df_map_data)
+proj4string(df_map) <- CRS(proj_sng)
+df_map_St <- st_as_sf(df_map)
+
+# preparation of shapefiles of land cover, cantonal limits and parks polygons.
+parks <- readOGR(dsn="//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/GIS/Swiss_Parks.shp", use_iconv=TRUE, encoding="UTF-8")
+parks <- spTransform(parks, CRS(proj_sng))
+landcover <- readOGR("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/GIS/LandCover_Parks.shp", use_iconv=TRUE, encoding="UTF-8")
+landcover <- spTransform(landcover, CRS(proj_sng))
+kanton <- readOGR("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/GIS/Swiss_Kanton.shp", use_iconv=TRUE, encoding="UTF-8")
+kanton <- spTransform(kanton, CRS(proj_sng))
+
+
+#Convert a geographical object in a simple feature with geometry
+#Reduce the time of processing, making efficient the process of intersection
+parks_St <- st_as_sf(parks)  
+landcover_St <- st_as_sf(landcover)
+kanton_St <- st_as_sf(kanton)
+
+# Intersect points (Flickr images) with limits of parks
+Flickr_park <- st_intersection(parks_St, df_map_St)
+
+# Intersect points (Flickr images) with land cover.
+Flickr_park <- st_intersection(landcover_St, Flickr_park)
+
+# Include data of canton in the points data
+Flickr_park <- st_intersection(kanton_St, Flickr_park)
+```
+
+```{r echo=TRUE}
+
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Flickr_Parks_map.png")       
+
+ggplot() + 
+  geom_sf(data = kanton_St, fill = "grey", color = "white") +
+  geom_sf(data = Flickr_park, fill = NA, color = "yellow", size=0.005) +
+  geom_sf(data = parks_St, fill= NA, color = "dark green", size= 1) +
+  ggtitle("Flickr pictures in Swiss National Parks") + 
+  theme(plot.title = element_text(hjust = 0.5))+
+  coord_sf()
+```
+
+```{r echo=TRUE}
+rm(trimmed)
+rm(df)
+rm(t)
+rm(df_map)
+rm(df_map_data)
+rm(df_map_coords)
+rm(df_map_St)
+rm(landcover)
+rm(parks)
+rm(kanton)
+```
+
+### 1.2.2 DATA TABLE EXPORTATION
+
+```{r echo=TRUE}
+
+flickr <- Flickr_park[c(39, 40, 41, 19, 23, 28, 38, 43, 44, 45, 47)]
+
+# rename
+names(flickr)[names(flickr) == "post_guid"] <- "photo_id"
+names(flickr)[names(flickr) == "user_guid"] <- "USER"
+names(flickr)[names(flickr) == "post_create_date"] <- "DATE"
+names(flickr)[names(flickr) == "gridcode"] <- "USE"
+names(flickr)[names(flickr) == "NAME"] <- "CANTON"
+names(flickr)[names(flickr) == "SHAPE_Area"] <- "km2"
+names(flickr)[names(flickr) == "tags"] <- "TAGS"
+names(flickr)[names(flickr) == "Name"] <- "PARK"
+names(flickr)[names(flickr) == "post_title"] <- "TITLE"
+names(flickr)[names(flickr) == "post_body"] <- "BODY"
+
+flickr <- flickr %>%
+    mutate(lng = unlist(map(flickr$geometry,1)),
+           lat = unlist(map(flickr$geometry,2)))
+flickr <- st_drop_geometry(flickr)
 
 #General statistics of each column
-summary(flickr)
+summary(flickr$photo_id)
 ```
 
 ```{r include=TRUE}
@@ -68,52 +339,37 @@ summary(flickr)
 options(dplyr.summarise.inform = FALSE)
 ```
 
-### FILTERING
-
-#### a. Only pictures taken after 2004 (inclusive)
-
-```{r echo=TRUE}
-
-# Creating a subset of the data, just for picture that were taken after 2004
-
-flickr_04 <- as_tbl_time(flickr, index = DATE) #We identify the date as an index
-
-flickr_04 <- filter(flickr_04, DATE >= as.Date("2004-01-01")) # we create a new dataframe just for the data after 2004
-
-#General statistics of each column
-summary(flickr_04)
-
-```
-
-#### b. Only pictures that are in categories of land cover that are natural
+### 1.2.3 FILTERING THE LAND COVER
+*Only pictures that are in categories of land cover that are natural*
 
 ```{r echo=TRUE}
 
 # Using the table obtained before, we create another subset avoiding the pictures in the land cover 100, 120, 140, 160
 # The pictures that are in land cover related to natural categories were considered
-flickr_04nat <- filter(flickr_04, USE!=100, USE!=120, USE!=140, USE!=160) # The expression USE! means avoid/reduce
+flickr_nat<- filter(flickr, USE!=100, USE!=120, USE!=140, USE!=160) # The expression USE! means avoid/reduce
 
 #General statistics of each column
-summary(flickr_04nat)
+summary(flickr_nat$photo_id)
 ```
 
-## INTRODUCTION
+# 2. GENERAL ANALYSIS OF PARKS
 
 ```{r echo=TRUE}
 # Application of the filter of the use, only natural land cover
   
-db <- flickr_04nat #We create a copy for future use
+db <- flickr_nat #We create a copy for future use
 
 ddbb <- db # We create another copy for future use
-  
+
 ```
 
 *a. Number of visitors each Swiss National Parks, according the land cover, *
-   *NA values refers to users or land cover category that doesn't exist  in the park*
+
+*NA values refers to users or land cover category that doesn't exist  in the park*
 ```{r echo=TRUE}
 
 #Filtering with a dynamic table to identify the parks, user, and the land cover.
-landcover <- flickr_04 %>%
+landcover <- flickr%>%
   group_by(PARK, USE, USER)%>%
   summarise(land_picture = n()) #Total number of picture in a land cover, per park, taken by a user.
 
@@ -144,11 +400,13 @@ names(landcover_park)[names(landcover_park)=="420"] <- "Unproductives"
 #Organizing the table by alphabetical order of Parks names
 landcover_park <- landcover_park %>% arrange(PARK)
 #Exporting the table to csv in the root folder
-write.csv(landcover_park,"C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\LandCover.csv", row.names = FALSE)
+#write.csv(landcover_park,"~/GitHub/Flickr_SwissParks/Results/LandCover.csv", row.names = FALSE)
 
 #Displaying  the table with a better format
 kbl(landcover_park)%>%
-  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left", latex_options = c("striped", "repeat_header"))
+rm(lu)
+rm(landcover)
 ```
 
 *b. Area (km2) of national parks*
@@ -171,7 +429,7 @@ area_park <- area_portions %>%
 area_park %>%
   summarize(area = sum(km))#km2
 
-summary(area) #Statistical summary of area (km2)
+rm(area_portions)
 ```
 
 *c. Count of pictures in the parks*
@@ -188,49 +446,50 @@ photos <- ddbb %>%
 ddbb %>%
   summarize(count =  n()) #pictures
 
-#Statistical summary of pictures
-summary(photos)
 ```
 
 *d. Count of Users in the parks*
 ```{r echo=TRUE}
+#Filtering in a dynamic table to extract the number of pictures per Park and users
 users_flickr <- ddbb %>%
   group_by(PARK, USER) %>%
   summarise(user_photos =  n())
-  #Counting the total area of parks
+
+#From the previous filter, we can count the number of users per park
 users_flickr <- users_flickr %>%
   group_by(PARK) %>%
   summarise(user = n())%>%
   mutate(ratio_users= round((user / sum(user))*100, 2)) %>% 
   arrange(desc(ratio_users))
 
-#The total area of parks:
+#The total summary about the number of users
 users_flickr %>%
   summarize(users = sum(user))#users
 
-summary(users_flickr)
 ```
  
 *d. Statistic of area (km2), users and photos for each Swiss National Parks:*
 *NOTE: THESE VALUES ONLY CONSIDER THE NATURAL LAND COVER  (the dismissed categories are: Building area", "Traffic and transportation surface", "Special settlement areas", "Recreation and green spaces"*
 ```{r echo=TRUE}
-general <- data.frame("Parks"= area_park$PARK, "km2"= area_park$km, "Photos"= photos$photo, "Photos_per"= photos$ratio_photos, "Photos_km"=round((photos$photo/area$km),2),"Users"=users_flickr$user, "Users_per"=users_flickr$ratio_users, "Users_km"=round((users_flickr$user/area$km),2))
+general <- data.frame("Parks"= area_park$PARK, "Area(km2)"= area_park$km, "#Flickr"= photos$photo, "%Flickr"= photos$ratio_photos, "Flickr/km2"=round((photos$photo/area_park$km),2),"#Users"=users_flickr$user, "%Users"=users_flickr$ratio_users, "Users/km2"=round((users_flickr$user/area_park$km),2), check.names=FALSE )
 
 general <- general %>% arrange(Parks)
 
 kbl(general) %>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 
-write.csv(general,"C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\General.csv", row.names = FALSE)
+#write.csv(general,"~/GitHub/Flickr_SwissParks/Results/General.csv", row.names = FALSE)
 
 ```
-## a. CONTRIBUTION OF USERS
+# 3. TEMPORAL ANALYSIS OF PARKS (Using users' visits)
 ```{r echo=TRUE}
-
+#Pictures taken by user
 contrib <- ddbb %>%
   group_by(PARK, USER)%>%
   summarise(photo = n())
-summary(contrib)
+summary(contrib$photo)
+
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Picture_Park_Taken.png")       
 
 ggplot(contrib, aes(x=log(photo))) + 
   geom_histogram(aes(y=(..count..)/sum(..count..)),
@@ -241,16 +500,20 @@ ggplot(contrib, aes(x=log(photo))) +
   theme(axis.text.x = element_text(colour = "grey20", size = 6, angle = 90, hjust = 0.5, vjust = 0.5),
           axis.text.y = element_text(colour = "grey20", size = 6),
           strip.text = element_text(face = "italic"),
-          text = element_text(size = 10))
+          text = element_text(size = 10))+
+  ggtitle('Distribution of percentage of pictures taken by users in the Parks')
+
+
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Trend_Pictures.png")       
 
 x <-contrib$photo
 y <- x + rnorm(2500, 0, 50)   
-qqplot(x, y) 
+qqplot(x, y)
+
 ```
 
-## 1. YEARLY VISITOR IN THE PARKS
+## 3.1 YEARLY VISITOR IN THE PARKS
 ```{r echo=TRUE}
-
 ddbb$DATE <- as.Date(ddbb$DATE)
 ddbb$YEAR <- format(ddbb$DATE, format="%Y")
 
@@ -263,7 +526,7 @@ yearly_counts <- year_photo %>%
   group_by(PARK, YEAR)%>%
   summarise(VISITS = n())
 
-#png("C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\general_trend.png")       
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/general_trend.png")       
 
 ggplot(data = yearly_counts, aes(x = YEAR, y = VISITS, group = 1)) +
     geom_line() +
@@ -272,70 +535,86 @@ ggplot(data = yearly_counts, aes(x = YEAR, y = VISITS, group = 1)) +
     theme(axis.text.x = element_text(colour = "grey20", size = 6, angle = 90, hjust = 0.5, vjust = 0.5),
           axis.text.y = element_text(colour = "grey20", size = 6),
           strip.text = element_text(face = "italic"),
-          text = element_text(size = 10))
+          text = element_text(size = 10))+
+  ggtitle('Annual distribution of users per Park')
 
+rm(year_photo)
 ```
 
-## 2. PARK USERS PER SEASON
+## 3.2 PARK USERS PER SEASON
 *Number of users per season in each Swiss National Parks*
 
 ```{r echo=TRUE}
-#Creating season column
-
- #create dates variable for your column that contains dates 
+#create dates variable for your column that contains dates 
 dates <- ddbb$DATE
 #get the month of the date, create new column called month
 ddbb$month<-(month(dates, label=TRUE))
 
-ddbb$SEASON <- ifelse(ddbb$month %in% c('May','Jun','Jul'), "SUMMER",
-                    ifelse (ddbb$month %in% c('Aug','Sep','Oct'), "AUTUMN",
+ddbb$SEASON <- ifelse(ddbb$month %in% c('May','Jun','Jul'), "Summer",
+                    ifelse (ddbb$month %in% c('Aug','Sep','Oct'), "Autumn",
                             ifelse (ddbb$month %in% c('Nove','Dec','Jan'), 
-                                    "WINTER", "SPRING")))
+                                    "Winter", "Spring")))
+#Calculation of pictures per user in seasons
 
-#Calculation of statistics per Season
 season <- ddbb %>%
   group_by(PARK, SEASON, USER)%>%
-  summarise(visit_season = n())
+  summarise(picture_season = n())
 
-  #Counting the number of users per park in each season
-season <- season %>%
+#From the previous table, we count the number of users per park in each season
+
+f <- c("Summer", "Spring", "Winter", "Autumn")
+color_list <- c("#ffbf00", "#00b04f","#00b0f0", "#ed7c31")
+col_order <- c("PARK", "Autumn", "Winter", "Spring", "Summer")
+
+season_users <- season %>%
   group_by(PARK, SEASON) %>%
-  summarise(season_users = n())
+  summarise(season_users = n())%>%
+  mutate(SEASON =  factor(SEASON, levels = f))%>%
+  arrange(SEASON)  
 
-sp<- pivot_wider(season, names_from = SEASON, values_from = season_users)
-season_park <- data.frame(sp)
+season_park<- pivot_wider(season_users, names_from = SEASON, values_from = season_users)
+season_park <- season_park[, col_order]
 season_park <- season_park %>% arrange(PARK)
+
+#write.csv(season_park,"//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Season_Park.csv", row.names = FALSE)
 
   #Display of the table with a better format
 kbl(season_park)%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 
   #Stacked normalized horizontal bar graph
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/season_park.png") 
 
-#png("C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\season_park.png")       
+ggplot(season_users, #my data
+       aes(x = PARK, y = season_users, fill = SEASON, group = SEASON)) + 
+         geom_bar(position = "fill", #Creates stacked bars with 100% of proportion
+                  stat="identity", 
+                  color='white', 
+                  width = 0.8)+
+  scale_y_continuous(labels = scales::percent)+ # Change the name of the labels into percentages
+  scale_fill_manual(values=color_list)+
+  guides(fill = guide_legend(reverse = TRUE))+ #Change the order of the names in the label
+  theme(plot.title = element_text(hjust = 0.5, face = 'bold'),
+        legend.position = 'bottom',
+        axis.text.x = element_text(angle = 90, vjust = 0.15, hjust=0.15, size = 9),
+        axis.text.y = element_text(size = 9),
+        strip.background = element_rect(fill = "#17252D", color = "#17252D"),
+        strip.text = element_text(size = rel(1), face = "bold", color = "white", margin = margin(5,0,5,0)))+
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 50))+
+  ggtitle("Proportion of visitors per Season")+ 
+  labs(x ="Parks", y = "Visitors")+ 
+  ggplot2::coord_flip() #We change the axis to fit into horizontal bars
 
-season_park %>% pivot_longer(-PARK) %>%
-  ggplot(aes(x = factor(PARK), y = value, fill = name, group = name))+
-  geom_bar(stat='identity', color='white', position='fill')+
-  scale_y_continuous(labels = scales::percent)+
-  scale_fill_manual(values=c("#ed7c31", "#00b04f", "#ffbf00","#00b0f0"))+
-  theme(legend.position = 'bottom',
-        panel.grid.minor = element_blank(),
-        panel.border = element_blank(),
-        plot.title = element_text(hjust=0.5))+
-  coord_flip() +
-  xlab('Swiss National Parks') + ylab('% visitors') +
-  labs( fill = "SEASONS")+
-  ggtitle('Proportion of visitors per Season')
-
+rm(season)
+rm(season_users)
 ```
 
-## 3. PARK VISITORS PER DAY OF THE WEEK
+## 3.3 VISITS PER DAY OF THE WEEK
 *Number of visitors per day in each Swiss National Parks*
 ```{r echo=TRUE}
 ddbb$DAY <- weekdays(as.Date(ddbb$DATE))
 ddbb$DAY <- factor(ddbb$DAY, levels = c("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"))
-#
+
 photoUser_day <- ddbb %>%
   group_by(PARK, DAY, USER)%>%
   summarise(photo_day = n())
@@ -350,94 +629,73 @@ sd<- pivot_wider(daily, names_from = DAY, values_from = visit_day)
 daily_park <- as.data.frame(sd)
 daily_park <- daily_park %>% arrange(PARK)
 
-  #Display of the table with a better format
+#Display of the table with a better format
 kbl(daily_park)%>%
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 
-write.csv(daily_park,"C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\Daily_Park.csv", row.names = FALSE)
+#write.csv(daily_park,"~/GitHub/Flickr_SwissParks/Results/Day-Visits_Park.csv", row.names = FALSE)
 
 ```
 
 *Bar plot of visitors per day in the Parks*
-```{r setup, include=FALSE}
-# Chunk options
-knitr::opts_chunk$set(
- fig.width = 10,
- fig.asp = 0.9,
- out.width = "95%"
-)
-```
-
-```{r theme_ggplot2, echo = FALSE}
-theme_base <- function(base_size = 14) {
-  theme_bw(base_size = base_size) %+replace%
-    theme(
-        legend.position = 'top',
-        legend.background = element_rect(fill = "transparent", colour = NA),
-        legend.key = element_rect(fill = "transparent", colour = NA),
-        plot.title = element_text(hjust=0.5, face = 'bold'),
-        panel.grid.minor = element_blank(),
-        panel.border = element_blank(),
-        axis.line = element_line(color = "black", arrow = arrow(length = unit(0.1, "lines"), type = "closed")),
-        axis.text.x = element_text(angle = 90, vjust = 0.15, hjust=0.15, size = 10),
-        axis.text.y = element_text(size = 10),
-        strip.background = element_rect(fill = "#17252D", color = "#17252D"),
-        strip.text = element_text(size = rel(0.5), face = "bold", color = "white", margin = margin(5,0,5,0))
-        )
-}
-
-```
-
 ```{r echo=TRUE}
-  #Horizontal bar chart of daily number of visitors per Park
+#Horizontal bar chart of daily number of visitors per Park
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/daily_park.png")   #Export the graph as *.png
 
-#png("C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\daily_park.png")       
-
-daily_park %>% 
-  pivot_longer(-PARK)  %>% 
-ggplot(aes(x = factor(PARK), y = value, fill = name, group = name)) +
-  geom_bar(position="dodge", stat="identity", color='white', width = 0.8)+
-  scale_fill_manual(values=c("#2980b9", "#27ae60", "#f39c12","#d35400", "#5dade2","#2ecc71","#76d7c4"))+
-  theme_base()+
-  scale_x_discrete(labels = function(x) str_wrap(x, width = 22))+
+ggplot(daily, #my data
+       aes(x = PARK, y = visit_day, fill = DAY, group = DAY)) +
+         geom_bar(position = position_dodge(), 
+                  stat="identity", 
+                  color='white', 
+                  width = 0.8)+
+         scale_fill_manual(values=c("#2980b9", "#5dade2", "#76d7c4","#2ecc71", "#27ae60", "#f39c12","#d35400"))+
+  theme(plot.title = element_text(hjust = 0.5, face = 'bold'),
+        legend.position = 'bottom',
+        axis.text.x = element_text(angle = 90, vjust = 0.15, hjust=0.15, size = 9),
+        axis.text.y = element_text(size = 9),
+        strip.background = element_rect(fill = "#17252D", color = "#17252D"),
+        strip.text = element_text(size = rel(0.5), face = "bold", color = "white", margin = margin(5,0,5,0)))+
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 24))+
   xlab('Swiss National Parks') + ylab('Number of visitors') +
-  labs( fill = "DAY")+
   ggtitle('Daily number of visitors')
 
 ```
+
 *Mosaic plot of visitors per day in the Parks (Two test)*
 ```{r echo=TRUE}
   #GRAPH OF MOSAIC PLOT OF PARKS AND DAYS
-
-#TEST 1: 
-#png("C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\daily_park_Mosaic1.png")       
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/daily_park_Mosaic1.png")       
 
 ggplot(data = photoUser_day) +
-  geom_mosaic(aes(x=product(DAY, PARK), fill = DAY)) +
+  geom_mosaic(aes(x=product(DAY, PARK), fill = DAY), offset = 0.02) +
   scale_fill_manual(values=c("#27ae60","#2ecc71","#76d7c4", "#5dade2", "#2980b9", "#f39c12","#d35400"))+
-  labs(y = "DAYS", title=" offset = 0.01") +
+  labs(y = "DAYS", title=" Mosaic plot of visits per Day in Parks ") +
   theme(legend.position = "none",
-        axis.text.y=element_text(size = 8),
+        axis.text.y=element_text(size = 10),
         axis.ticks.y=element_blank(),
-        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8))
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 10)
+        )
 ```
 
 ```{r echo=TRUE}
-#TEST 2:
-#png("C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\daily_park_Mosaic2.png")       
+#POINT GRAPH OF FREQUENCY OF VISIT IN PARKS PER DAY
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/daily_park_Mosaic2.png")       
 
 ggplot(daily, aes(x = PARK, y = visit_day, color = DAY)) +
   geom_point() +
   labs(x = "Days", y = "Visits") +
   scale_color_manual(name = "Days:", values=c("#27ae60","#2ecc71","#76d7c4", "#5dade2", "#2980b9", "#f39c12","#d35400")) +
   theme(legend.title = element_text(size = 14, face = 2),
-        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8))
+        legend.position = 'bottom',
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8))+
+  ggtitle('Daily total number of visitors in Parks')
 ```
 
-## 5. USERS PROFILES
+# 4. USERS PROFILES
+
 *Analysis of users according the canton origin, visited park, and time span between the first and the last picture *
 
-### 5.a. Canton of origin
+## 4.1. ANALYSIS OF USERS BY CANTON
 ```{r echo=TRUE}
 canton<- ddbb %>%
   group_by(CANTON, USER)%>%
@@ -450,18 +708,18 @@ canton_users <- canton_users %>% mutate_if(is.numeric, ~1 * (. > 0))
 canton_users$Total_Canton = rowSums(canton_users[,c(2:13)])
 canton_users <- canton_users[order(canton_users$Total_Canton, decreasing = FALSE),]
 
-write.csv(canton_users,"C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\Canton_Users.csv", row.names = FALSE)
+#write.csv(canton_users,"~/GitHub/Flickr_SwissParks/Results/Canton_Users.csv", row.names = FALSE)
 
 ggplot(canton_users, aes(x=Total_Canton))+
   geom_histogram(binwidth=1 ,colour="black", fill="white")+
   geom_vline(aes(xintercept=mean(Total_Canton)), color="blue", linetype="dashed", size=1)+
   labs(title="Histogram of Cantons by users ",x="Number of visited Cantons", y = "Count of users")+
   scale_x_continuous(breaks = seq(0, 12, 1))+
-  scale_y_continuous(breaks = seq(0, 2500, 100))
+  scale_y_continuous(breaks = seq(0, 6000, 200))
 
 #Heatmap
 
-coul <- colorRampPalette(c("beige", "green"))(10)
+coul <- colorRampPalette(c("beige", "green"))(5)
 
 rownames(canton_users) <- canton_users[,1]
 canton_users[,1]<- NULL
@@ -470,15 +728,13 @@ data <-as.matrix(canton_users)
 
 heatmap(data, Colv = NA, Rowv = NA, scale = "column", col = coul, main = "Heatmap of User per Canton")
 
+rm(canton)
+rm(co)
+rm(coul)
+
 ```
 
-```{r echo=TRUE}
-#Origin of user per Canton*
-#kbl(canton_users[1:20,])%>%
-#  kable_styling(bootstrap_options = "striped", full_width = F, #position = "left")
-```
-
-### 5.b. Park of origin
+## 4.2. ANALYSIS OF USERS BY PARK
 ```{r echo=TRUE}
 park <- ddbb %>%
   group_by(PARK, USER)%>%
@@ -491,14 +747,14 @@ park_users <- park_users %>% mutate_if(is.numeric, ~1 * (. > 0))
 park_users$Total_Park = rowSums(park_users[,c(2:21)])
 park_users <- park_users[order(park_users$Total_Park, decreasing = FALSE),]
 
-write.csv(park_users,"C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\Park_Users.csv", row.names = FALSE)
+#write.csv(park_users,"~/GitHub/Flickr_SwissParks/Results/Park_Users.csv", row.names = FALSE)
 
 ggplot(park_users, aes(x=Total_Park))+
   geom_histogram(binwidth=1 ,colour="black", fill="white")+
   geom_vline(aes(xintercept=mean(Total_Park)), color="blue", linetype="dashed", size=1)+
   labs(title="Histogram of Parks by users ",x="Number of visited Parks", y = "Count of users")+
   scale_x_continuous(breaks = seq(0, 20, 1))+
-  scale_y_continuous(breaks = seq(0, 2500, 100))
+  scale_y_continuous(breaks = seq(0, 6000, 200))
 
 #Heatmap
 
@@ -507,20 +763,19 @@ coul <- colorRampPalette(c("beige", "blue"))(10)
 rownames(park_users) <- park_users[,1]
 park_users[,1]<- NULL
 park_users[,21]<- NULL
-data <-as.matrix(park_users)
+park_users <-as.matrix(park_users)
 
-heatmap(data, Colv = NA, Rowv = NA, scale = "column", col = coul, main = "Heatmap of User per Park")
+heatmap(park_users, Colv = NA, Rowv = NA, scale = "column", col = coul, main = "Heatmap of User per Park")
+
+rm(park)
+rm(po)
+rm(coul)
+
 
 ```
 
 
-```{r echo=TRUE}
-#Origin of user per Park*
-# kbl(park_users[1:20,])%>%
-#  kable_styling(bootstrap_options = "striped", full_width = F, #position = "left")
-```
-
-### 5.c. Time span
+## 4.3. ANALYSIS OF USERS TIME SPEND
 ```{r echo=TRUE}
 user <- ddbb %>%
   group_by(USER)%>%
@@ -540,6 +795,7 @@ dt1 <- dt %>%
 
 first <- as.data.frame(dt1)
 names(first)[names(first)=="DATE"] <- "start"
+
 dt2 <- dt %>%
     group_by(USER) %>%
      arrange(desc(DATE)) %>%
@@ -547,14 +803,15 @@ dt2 <- dt %>%
 
 last <- as.data.frame(dt)
 names(last)[names(last)=="DATE"] <- "end"
-dt <- merge(last, first, by="USER")
-dur <- dt %>%
+
+dt_final <- merge(last, first, by="USER")
+
+dur <- dt_final %>%
   mutate(
     days = end - start,
-    seconds    = as.numeric(difftime(end, start)) / 365.25,
-    years = round((start %--% end) / years(1)),
-    between = end %--% start 
-  )
+    seconds = as.numeric(difftime(end, start)) / 365.25,
+    years = round(interval(start, end) / years(1))
+ )
 
 time_user <-  merge(user, dur, by="USER", all=T)
 time_user <- subset(time_user, select=-c(photos.x,photos.y))
@@ -565,77 +822,19 @@ ggplot(time_user, aes(x=years))+
   geom_vline(aes(xintercept=mean(years)), color="blue", linetype="dashed", size=1)+
   labs(title="Histogram of time between first and last picture by users ",x="time span in years", y = "Count of users")+
   scale_x_continuous(breaks = seq(0, 20, 1))+
-  scale_y_continuous(breaks = seq(0, 5000, 500))
+  scale_y_continuous(breaks = seq(0, 6000, 500))
 
-write.csv(time_user,"C:\\Users\\dmarinoc\\Documents\\GitHub\\Flickr_SwissParks\\Time_Users.csv", row.names = FALSE)
+#write.csv(time_user,"~/GitHub/Flickr_SwissParks/Results/Time_Users.csv", row.names = FALSE)
+
+rm(user)
+rm(dt)
+rm(dt1)
+rm(dt2)
+rm(last)
+rm(dur)
 ```
 
-
-```{r echo=TRUE}
-#User timespend of taken pictures
-#kbl(time_user[1:20,])%>%
-#  kable_styling(bootstrap_options = "striped", full_width = F, #position = "left")
-```
-
-*Photos taken in the same date in the same position*
-```{r echo=TRUE}
-  #5.d. Frequency of visits
-photo_date_place <- ddbb %>%
-  group_by(USER, DATE, lat)%>%
-  summarise(photo1day_sameplace = n())
-
-ggplot(photo_date_place, aes(x=photo1day_sameplace))+
-  geom_histogram(binwidth=1 ,colour="black", fill="white")+
-  geom_vline(aes(xintercept=mean(photo1day_sameplace)), color="blue", linetype="dashed", size=1)+
-  labs(title="Number of photos in a day, in the same place ",x="No. pictures in the same place in a day", y = "No. users")+
-  xlim(c(0,80))+ ylim(c(0,500))
-
-user_date_place <- photo_date_place %>%
-  group_by(USER, DATE)%>%
-  summarise(moves1day_users= n())
-
-ggplot(user_date_place, aes(x=moves1day_users))+
-  geom_histogram(binwidth=1 ,colour="black", fill="white")+
-  geom_vline(aes(xintercept=mean(moves1day_users)), color="blue", linetype="dashed", size=1)+
-  labs(title="Number of moves in a day", x="No. moves in a day", y = "No. users")+
-  xlim(c(0,100))+ ylim(c(0,2000))
-```
-
-*Presence of visitors in a day, in different positions*
-```{r echo=TRUE}
-user_daily_visits <- user_date_place %>%
-  group_by(USER)%>%
-  summarise(user_day_stay = n())
-
-ggplot(user_daily_visits, aes(x=user_day_stay))+
-  geom_histogram(binwidth=1 ,colour="black", fill="white")+
-  geom_vline(aes(xintercept=mean(user_day_stay)), color="blue", linetype="dashed", size=1)+
-  labs(title="Timespend in a place (possible in different visits)", x="No. days spend", y = "No. users")+
-  xlim(c(0,100))+ ylim(c(0,600))
-```
-
-## Textual Analysis
-```{r include=FALSE}
-# Install Packages
-#install.packages("tm") # for text mining
-#install.packages("SnowballC") # for text stemming
-#install.packages("wordcloud") # word-cloud generator 
-#install.packages("RColorBrewer") # color palettes
-#install.packages("quanteda")
-#install.packages("igraph")
-#install.packages("reshape2")
-
-#Load libraries
-library(tm)
-library(SnowballC)
-library(wordcloud)
-library(RColorBrewer)
-library(tidyverse)
-library(tidytext)
-library(quanteda)
-library(igraph)
-library(reshape2)
-```
+# 5.SEMANTIC ANALYSIS 
 
 ```{r echo=TRUE}
 set.seed(42)
@@ -646,16 +845,22 @@ names(base)[names(base) == "ddbb.TAGS"] <- "text"
 names(base)[names(base) == "ddbb.USER"] <- "author"
 names(base)[names(base) == "ddbb.photo_id"] <- "origin"
 
-base$text <- tolower(base$text) # Lowercase
 base$text <- gsub("[[:digit:]]", " ", base$text) # Remove numbers
 base$text <- gsub("\\s+", " ", str_trim(base$text)) # Remove extra whitespaces
 base$text <- gsub("(\\-¨“„)", " ", base$text) # Remove extra symbols
 base$text <- gsub("(?!\\.)[[:punct:]]", " ", base$text, perl=TRUE) #remove punctuation
-base <- base[-which(is.na(base$text)),] #dropping row without TAGS
+
 base_source=DataframeSource(base)
 base_corpus=VCorpus(base_source)
 base_corpus_clean <- tm_map(base_corpus, removeWords, stopwords("english"))
 base_corpus_root <- tm_map(base_corpus_clean,stemDocument) #find to root of the words 
+
+```
+
+## 5.0 ANALYSIS: GENERAL
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Parks.png")       
+
 wordcloud(base_corpus_root, 
           min.freq = 50,
           max.words = 100,
@@ -666,29 +871,346 @@ wordcloud(base_corpus_root,
 #myStopwords <- setdiff(myStopwords, c("d", "e")) 
 #text_corpus_clean <- tm_map(base_corpus_clean, removeWords, myStopwords)
 
-dtm <- DocumentTermMatrix(base_corpus_root, control= list(wordLengths=c(3, 8)))
-head(sort(slam::col_sums(dtm), decreasing = TRUE), n=10)
+```
+## 5.2 ANALYSIS: Schweizerischer Nationalpark
+```{r echo=TRUE}
+#png(//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Nationalpark.png")       
+
+sub_jurapark <- base%>%filter(doc_id=="Schweizerischer Nationalpark")
+sub_jurapark=DataframeSource(sub_jurapark)
+sub_jurapark=VCorpus(sub_jurapark)
+sub_jurapark <- tm_map(sub_jurapark, removeWords, stopwords("english"))
+sub_jurapark <- tm_map(sub_jurapark,stemDocument) #find to root of the words 
+jurapark <- wordcloud(sub_jurapark, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+
 ```
 
+
+## 5.2 ANALYSIS: Jurapark Aargau
 ```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Jurapark.png")       
 
-Heaps_plot(dtm)
-
-Zipf_plot(dtm)
+sub_jurapark <- base%>%filter(doc_id=="Jurapark Aargau")
+sub_jurapark=DataframeSource(sub_jurapark)
+sub_jurapark=VCorpus(sub_jurapark)
+sub_jurapark <- tm_map(sub_jurapark, removeWords, stopwords("english"))
+sub_jurapark <- tm_map(sub_jurapark,stemDocument) #find to root of the words 
+jurapark <- wordcloud(sub_jurapark, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
 
 ```
 
-*Bipartite network of parks and tags*
+## 5.3 ANALYSIS: Parc naturel régional Gruyère Pays-d’Enhaut
 ```{r echo=TRUE}
-dtm_df <- reshape2::melt(as.matrix(dtm))
-# remove 0 values and order the data.frame
-dtm_df <- dtm_df[dtm_df$value > 2, ]
-dtm_df <- dtm_df[order(dtm_df$value, decreasing = TRUE), ]
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Gruyere.png")       
+
+sub_gruyere <- base%>%filter(doc_id=="Parc naturel régional Gruyère Pays-d’Enhaut")
+sub_gruyere=DataframeSource(sub_gruyere)
+sub_gruyere=VCorpus(sub_gruyere)
+sub_gruyere <- tm_map(sub_gruyere, removeWords, stopwords("english"))
+sub_gruyere <- tm_map(sub_gruyere,stemDocument) #find to root of the words 
+gruyere <- wordcloud(sub_gruyere, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
 ```
 
+## 5.4 ANALYSIS: Biosfera Val Müstair
 ```{r echo=TRUE}
-set.seed(42)
-g <- graph.data.frame(dtm_df, directed = FALSE)
-#bg <-bipartite.mapping(g)
-plot(g)
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Mustair.png")       
+
+sub_mustair <- base%>%filter(doc_id=="Biosfera Val Müstair")
+sub_mustair=DataframeSource(sub_mustair)
+sub_mustair=VCorpus(sub_mustair)
+sub_mustair <- tm_map(sub_mustair, removeWords, stopwords("english"))
+sub_mustair <- tm_map(sub_mustair,stemDocument) #find to root of the words 
+mustair <- wordcloud(sub_mustair, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.5 ANALYSIS: Wildnispark Zürich Sihlwald
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Sihlwald.png")       
+
+sub_sihlwald <- base%>%filter(doc_id=="Wildnispark Zürich Sihlwald")
+sub_sihlwald=DataframeSource(sub_sihlwald)
+sub_sihlwald=VCorpus(sub_sihlwald)
+sub_sihlwald <- tm_map(sub_sihlwald, removeWords, stopwords("english"))
+sub_sihlwald <- tm_map(sub_sihlwald,stemDocument) #find to root of the words 
+sihlwald <- wordcloud(sub_sihlwald, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.6 ANALYSIS: Parc régional Chasseral
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Chasseral.png")       
+
+sub_chasseral <- base%>%filter(doc_id=="Parc régional Chasseral")
+sub_chasseral=DataframeSource(sub_chasseral)
+sub_chasseral=VCorpus(sub_chasseral)
+sub_chasseral <- tm_map(sub_chasseral, removeWords, stopwords("english"))
+sub_chasseral <- tm_map(sub_chasseral,stemDocument) #find to root of the words 
+chasseral <- wordcloud(sub_chasseral, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.7 ANALYSIS: Parc Jura vaudois
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Vaudois.png")       
+
+sub_vaudois <- base%>%filter(doc_id=="Parc Jura vaudois")
+sub_vaudois=DataframeSource(sub_vaudois)
+sub_vaudois=VCorpus(sub_vaudois)
+sub_vaudois <- tm_map(sub_vaudois, removeWords, stopwords("english"))
+sub_vaudois <- tm_map(sub_vaudois,stemDocument) #find to root of the words 
+vaudois <- wordcloud(sub_vaudois, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.8 ANALYSIS: Parc Ela
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Ela.png")       
+
+sub_ela <- base%>%filter(doc_id=="Parc Ela")
+sub_ela=DataframeSource(sub_ela)
+sub_ela=VCorpus(sub_ela)
+sub_ela <- tm_map(sub_ela, removeWords, stopwords("english"))
+sub_ela <- tm_map(sub_ela,stemDocument) #find to root of the words 
+ela <- wordcloud(sub_ela, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.9 ANALYSIS: Naturpark Gantrisch
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Gantrisch.png")       
+
+sub_gantrisch <- base%>%filter(doc_id=="Naturpark Gantrisch")
+sub_gantrisch=DataframeSource(sub_gantrisch)
+sub_gantrisch=VCorpus(sub_gantrisch)
+sub_gantrisch <- tm_map(sub_gantrisch, removeWords, stopwords("english"))
+sub_gantrisch <- tm_map(sub_gantrisch,stemDocument) #find to root of the words 
+gantrisch <- wordcloud(sub_gantrisch, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.10 ANALYSIS: Naturpark Beverin
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Beverin.png")       
+
+sub_beverin <- base%>%filter(doc_id=="Naturpark Beverin")
+sub_beverin=DataframeSource(sub_beverin)
+sub_beverin=VCorpus(sub_beverin)
+sub_beverin <- tm_map(sub_beverin, removeWords, stopwords("english"))
+sub_beverin <- tm_map(sub_beverin,stemDocument) #find to root of the words 
+beverin <- wordcloud(sub_beverin, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.11 ANALYSIS: Regionaler Naturpark Schaffhausen
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Schaffhausen.png")       
+
+sub_schaffhausen <- base%>%filter(doc_id=="Regionaler Naturpark Schaffhausen")
+sub_schaffhausen=DataframeSource(sub_schaffhausen)
+sub_schaffhausen=VCorpus(sub_schaffhausen)
+sub_schaffhausen <- tm_map(sub_schaffhausen, removeWords, stopwords("english"))
+sub_schaffhausen <- tm_map(sub_schaffhausen,stemDocument) #find to root of the words 
+schaffhausen <- wordcloud(sub_schaffhausen, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.12 ANALYSIS: Parc naturel régional de la Vallée du Trient
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Trient.png")       
+
+sub_trient <- base%>%filter(doc_id=="Parc naturel régional de la Vallée du Trient")
+sub_trient=DataframeSource(sub_trient)
+sub_trient=VCorpus(sub_trient)
+sub_trient <- tm_map(sub_trient, removeWords, stopwords("english"))
+sub_trient <- tm_map(sub_trient,stemDocument) #find to root of the words 
+trient <- wordcloud(sub_trient, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.13 ANALYSIS: Parc du Doubs
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Doubs.png")       
+
+sub_doubs <- base%>%filter(doc_id=="Parc du Doubs")
+sub_doubs=DataframeSource(sub_doubs)
+sub_doubs=VCorpus(sub_doubs)
+sub_doubs <- tm_map(sub_doubs, removeWords, stopwords("english"))
+sub_doubs <- tm_map(sub_doubs,stemDocument) #find to root of the words 
+doubs <- wordcloud(sub_doubs, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.14 ANALYSIS: Naturpark Thal
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Thal.png")       
+
+sub_thal <- base%>%filter(doc_id=="Naturpark Thal")
+sub_thal=DataframeSource(sub_thal)
+sub_thal=VCorpus(sub_thal)
+sub_thal <- tm_map(sub_thal, removeWords, stopwords("english"))
+sub_thal <- tm_map(sub_thal,stemDocument) #find to root of the words 
+thal <- wordcloud(sub_thal, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.15 ANALYSIS: Naturpark Pfyn-Finges
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Pfyn-Finges.png")       
+
+sub_pfyn_finges <- base%>%filter(doc_id=="Naturpark Pfyn-Finges")
+sub_pfyn_finges=DataframeSource(sub_pfyn_finges)
+sub_pfyn_finges=VCorpus(sub_pfyn_finges)
+sub_pfyn_finges <- tm_map(sub_pfyn_finges, removeWords, stopwords("english"))
+sub_pfyn_finges <- tm_map(sub_pfyn_finges,stemDocument) #find to root of the words 
+pfyn_finges  <- wordcloud(sub_pfyn_finges, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.16 ANALYSIS: Naturpark Diemtigtal
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Diemigtal.png")       
+
+sub_diemtigtal <- base%>%filter(doc_id=="Naturpark Diemtigtal")
+sub_diemtigtal=DataframeSource(sub_diemtigtal)
+sub_diemtigtal=VCorpus(sub_diemtigtal)
+sub_diemtigtal <- tm_map(sub_diemtigtal, removeWords, stopwords("english"))
+sub_diemtigtal <- tm_map(sub_diemtigtal,stemDocument) #find to root of the words 
+diemtigtal  <- wordcloud(sub_diemtigtal, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.17 ANALYSIS: UNESCO Biosphäre Entlebuch
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Entlebuch.png")       
+
+sub_entlebuch <- base%>%filter(doc_id=="UNESCO Biosphäre Entlebuch")
+sub_entlebuch=DataframeSource(sub_entlebuch)
+sub_entlebuch=VCorpus(sub_entlebuch)
+sub_entlebuch <- tm_map(sub_entlebuch, removeWords, stopwords("english"))
+sub_entlebuch <- tm_map(sub_entlebuch,stemDocument) #find to root of the words 
+entlebuch  <- wordcloud(sub_entlebuch, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.18 ANALYSIS: Parco Val Calanca
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Calanca.png")       
+
+sub_calanca<- base%>%filter(doc_id=="Parco Val Calanca")
+sub_calanca=DataframeSource(sub_calanca)
+sub_calanca=VCorpus(sub_calanca)
+sub_calanca <- tm_map(sub_calanca, removeWords, stopwords("english"))
+sub_calanca <- tm_map(sub_calanca,stemDocument) #find to root of the words 
+calanca  <- wordcloud(sub_calanca, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.19 ANALYSIS: Landschaftspark Binntal
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Binntal.png")       
+
+sub_binntal<- base%>%filter(doc_id=="Landschaftspark Binntal")
+sub_binntal=DataframeSource(sub_binntal)
+sub_binntal=VCorpus(sub_binntal)
+sub_binntal <- tm_map(sub_binntal, removeWords, stopwords("english"))
+sub_binntal <- tm_map(sub_binntal,stemDocument) #find to root of the words 
+binntal  <- wordcloud(sub_binntal, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+## 5.20 ANALYSIS: Parc naturel périurbain du Jorat
+```{r echo=TRUE}
+#png("//files.geo.uzh.ch/shared/group/geocomp/jort_franziska_daniela/Results/Words_Jorat.png")       
+
+sub_jorat<- base%>%filter(doc_id=="Parc naturel périurbain du Jorat")
+sub_jorat=DataframeSource(sub_jorat)
+sub_jorat=VCorpus(sub_jorat)
+sub_jorat <- tm_map(sub_jorat, removeWords, stopwords("english"))
+sub_jorat <- tm_map(sub_jorat,stemDocument) #find to root of the words 
+jorat  <- wordcloud(sub_jorat, 
+          min.freq = 50,
+          max.words = 100,
+          random.order = FALSE,
+          random.color = FALSE,
+          colors = brewer.pal(8, "Dark2"))
 ```
